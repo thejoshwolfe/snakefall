@@ -332,10 +332,15 @@ function move(dr, dc) {
   });
 
   // check for exit
-  if (newTile === EXIT && countFruit() === 0) {
-    removeObject(snake);
-    var snakeCount = 0;
+  if (countFruit() === 0) {
+    var snakes = getSnakes();
+    for (var i = 0; i < snakes.length; i++) {
+      if (level.map[snakes[i].locations[0]] === EXIT) {
+        removeObject(snakes[i]);
+      }
+    }
     // reindex snakes
+    var snakeCount = 0;
     for (var i = 0; i < level.objects.length; i++) {
       var object = level.objects[i];
       if (object.type === "snake") {
@@ -348,7 +353,7 @@ function move(dr, dc) {
       alert("you win!");
       reset();
     } else {
-      if (activeSnake === snakeCount) {
+      if (activeSnake >= snakeCount) {
         activeSnake = 0;
       }
     }
@@ -390,18 +395,18 @@ function findObjectAtLocation(location) {
   return null;
 }
 function countFruit() {
-  return countObjectsOfType("fruit");
+  return getObjectsOfType("fruit").length;
 }
 function countSnakes() {
-  return countObjectsOfType("snake");
+  return getSnakes().length;
 }
-function countObjectsOfType(type) {
-  var count = 0;
-  for (var i = 0; i < level.objects.length; i++) {
-    var object = level.objects[i];
-    if (object.type === type) count++;
-  }
-  return count;
+function getSnakes() {
+  return getObjectsOfType("snake");
+}
+function getObjectsOfType(type) {
+  return level.objects.filter(function(object) {
+    return object.type == type;
+  });
 }
 
 var snakeColors = [
