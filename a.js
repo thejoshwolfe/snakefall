@@ -175,16 +175,16 @@ document.addEventListener("keydown", function(event) {
   event.preventDefault();
   switch (event.keyCode) {
     case 37: // left
-      move(-1, 0);
-      break;
-    case 38: // up
       move(0, -1);
       break;
-    case 39: // right
-      move(1, 0);
+    case 38: // up
+      move(-1, 0);
       break;
-    case 39: // down
+    case 39: // right
       move(0, 1);
+      break;
+    case 40: // down
+      move(1, 0);
       break;
     case 8:  // backspace
       break;
@@ -195,6 +195,23 @@ document.addEventListener("keydown", function(event) {
   }
   render();
 });
+
+function move(dr, dc) {
+  var snake = findActiveSnake();
+  var headRowcol = getRowcol(level, snake.locations[0]);
+  var newRowcol = {r:headRowcol.r + dr, c:headRowcol.c + dc};
+  snake.locations.unshift(getLocation(level, newRowcol.r, newRowcol.c));
+  snake.locations.pop();
+  render();
+}
+
+function findActiveSnake() {
+  for (var i = 0; i < level.objects.length; i++) {
+    var object = level.objects[i];
+    if (object.type === "snake" && object.snakeIndex === activeSnake) return object;
+  }
+  throw asdf;
+}
 
 var snakeColors = [
   "#f00",
