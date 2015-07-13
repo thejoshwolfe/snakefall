@@ -162,6 +162,10 @@ function unmove() {
   level.objects = JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]);
   render();
 }
+function reset() {
+  unmoveBuffer.splice(1);
+  level.objects = JSON.parse(unmoveBuffer[0]);
+}
 
 function deepEquals(a, b) {
   if (a == null) return b == null;
@@ -232,9 +236,13 @@ document.addEventListener("keydown", function(event) {
       move(1, 0);
       break;
     case 8:  // backspace
+    case 90: // z
       unmove();
       break;
-    case 32: // space
+    case 82: // r
+      reset();
+      break;
+    case 32: // spacebar
     case 9:  // tab
       activeSnake = (activeSnake + 1) % countSnakes();
       break;
@@ -281,7 +289,7 @@ function move(dr, dc) {
     if (snakeCount === 0) {
       render();
       alert("you win!");
-      // TODO: reset();
+      reset();
     } else {
       if (activeSnake === snakeCount) {
         activeSnake = 0;
@@ -355,7 +363,7 @@ function render() {
           drawQuarterPie(r, c, radiusFactor, "#00f", 2);
           drawQuarterPie(r, c, radiusFactor, "#ff0", 3);
           break;
-        default: //throw asdf;
+        default: throw asdf;
       }
     }
   }
