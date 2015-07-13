@@ -1,76 +1,223 @@
 var canvas = document.getElementById("canvas");
 
-var level = [
-  "                         ",
-  "                         ",
-  "                         ",
-  "                         ",
-  "                         ",
-  "                         ",
-  "                         ",
-  "                         ",
-  "                         ",
-  "           @             ",
-  "                         ",
-  "                         ",
-  "        >1    2<         ",
-  "        ^$    $^         ",
-  "           O             ",
-  "           O             ",
-  "           O             ",
-  "           O             ",
-  "           O             ",
-  "           O             ",
+var SPACE = 0;
+var WALL = 1;
+var SPIKE = 2;
+var EXIT = 3;
+
+var cardinalDirections = [
+  {r: 1, c: 0, forwards:"v", backwards:"^"},
+  {r:-1, c: 0, forwards:"^", backwards:"v"},
+  {r: 0, c: 1, forwards:">", backwards:"<"},
+  {r: 0, c:-1, forwards:"<", backwards:">"},
 ];
-var levelWidth = 25;
-var levelHeight = 20;
+
+var level1 = {
+  map: [
+    "                    ",
+    "                    ",
+    "         @          ",
+    "                    ",
+    "                    ",
+    "      AA    BB      ",
+    "      A$    $B      ",
+    "         %          ",
+    "         %          ",
+    "         %          ",
+  ],
+  objects: {
+    "A": {
+      type: "snake",
+      shape: [
+        ">@",
+        "^ ",
+      ],
+    },
+    "B": {
+      type: "snake",
+      shape: [
+        "@<",
+        " ^",
+      ],
+    },
+  },
+};
 var tileSize = 30;
-(function() {
-  if (level.length !== levelHeight) throw asdf;
-  level.forEach(function(row) {
-    if (row.length !== levelWidth) throw asdf;
+var level;
+loadLevel(level1);
+function loadLevel(serialLevel) {
+  var result = {
+    map: [],
+    objects: [],
+    width: null,
+    height: null,
+    snakeCount: 0,
+  };
+  validateSerialRectangle(result, serialLevel.map);
+  var objectsByKey = {};
+  serialLevel.map.forEach(function(row, r) {
+    row.split("").forEach(function(tileCode, c) {
+      if (tileCode === " ") {
+        result.map.push(SPACE);
+      } else if (tileCode === "%") {
+        result.map.push(WALL);
+      } else if (tileCode === "#") {
+        result.map.push(SPIKE);
+      } else if (tileCode === "@") {
+        result.map.push(EXIT);
+      } else if (tileCode === "$") {
+        result.map.push(SPACE);
+        result.objects.push(newFruit(r, c));
+      } else if (/[A-Za-z]/.test(tileCode)) {
+        result.map.push(SPACE);
+        var object = objectsByKey[tileCode];
+        if (object == null) {
+          objectsByKey[tileCode] = object = newObject(r, c, serialLevel.objects[tileCode]);
+          result.objects.push(object);
+        } else {
+          // TODO: check the shape
+        }
+      } else {
+        throw asdf;
+      }
+    });
   });
-})();
+
+  level = result;
+  canvas.width = tileSize * level.width;
+  canvas.height = tileSize * level.height;
+
+  function newFruit(r, c) {
+    return {
+      type: "fruit",
+      locations: [getLocation(result, r, c)],
+    };
+  }
+  function newObject(r, c, serialObjectSpec) {
+    // TODO: align c backwards for shapes that have space in the upper-left corner
+    var type;
+    var snakeIndex = null;
+    if (serialObjectSpec.type === "snake") {
+      type = "snake";
+      snakeIndex = result.snakeCount;
+      result.snakeCount += 1;
+    } else {
+      throw asdf;
+    }
+    var shapeProperties = {width: null, height: null};
+    validateSerialRectangle(shapeProperties, serialObjectSpec.shape);
+    var localLocations = [];
+    var node = findHead();
+    localLocations.push(node);
+    while (true) {
+      if (localLocations.length >= shapeProperties.height * shapeProperties.width) throw asdf;
+      node = findNextSegment(node);
+      if (node == null) break;
+      localLocations.push(node);
+    }
+    var locations = localLocations.map(function(node) {
+      return getLocation(result, r + node.r, c + node.c);
+    });
+    return {
+      type: type,
+      locations: locations,
+      snakeIndex: snakeIndex,
+    };
+
+    function findHead() {
+      for (var r = 0; r < serialObjectSpec.shape.length; r++) {
+        var row = serialObjectSpec.shape[r];
+        for (var c = 0; c < row.length; c++) {
+          if (row[c] === "@") return {r:r, c:c};
+        }
+      }
+      throw asdf;
+    }
+    function findNextSegment(fromNode) {
+      for (var i = 0; i < cardinalDirections.length; i++) {
+        var node = {r:cardinalDirections[i].r + fromNode.r, c:cardinalDirections[i].c + fromNode.c};
+        if (node.c < 0 || node.c >= shapeProperties.width) continue;
+        if (node.r < 0 || node.r >= shapeProperties.height) continue;
+        var shapeCode = serialObjectSpec.shape[node.r][node.c];
+        if (shapeCode === cardinalDirections[i].backwards) return node;
+      }
+      return null;
+    }
+  }
+}
+
+function validateSerialRectangle(outProperties, table) {
+  outProperties.height = table.length;
+  table.forEach(function(row) {
+    if (outProperties.width === null) {
+      outProperties.width = row.length;
+    } else {
+      if (outProperties.width !== row.length) throw asdf;
+    }
+  });
+}
+
+function getLocation(level, r, c) {
+  if (c < 0 || c >= level.width) throw asdf;
+  if (r < 0 || r >= level.height) throw asdf;
+  return r * level.width + c;
+}
+function getRowcol(level, location) {
+  if (location < 0 || location >= level.width * level.height) throw asdf;
+  var r = Math.floor(location / level.width);
+  var c = location % level.width;
+  return {r:r, c:c};
+}
 
 document.addEventListener("keydown", function(event) {
-  console.log(event);
+  if (event.shiftKey || event.ctrlKey || event.altKey) return;
+  if (event.keyCode > 90) return;
+  event.preventDefault();
+  switch (event.keyCode) {
+    case 37: // left
+      move(-1, 0);
+      break;
+    case 38: // up
+      move(0, -1);
+      break;
+    case 39: // right
+      move(1, 0);
+      break;
+    case 39: // down
+      move(0, 1);
+      break;
+    case 8:  // backspace
+      break;
+    case 32: // space
+    case 9:  // tab
+      activeSnake = (activeSnake + 1) % level.snakeCount;
+      break;
+  }
+  render();
 });
 
-var snakeToColor = {
-  "1": "#f00",
-  "2": "#0f0",
-  "3": "#00f",
-};
+var snakeColors = [
+  "#f00",
+  "#0f0",
+];
+
+var activeSnake = 0;
 
 function render() {
   var context = canvas.getContext("2d");
   context.fillStyle = "#000";
   context.fillRect(0, 0, canvas.width, canvas.height);
 
-  for (var r = 0; r < levelHeight; r++) {
-    for (var c = 0; c < levelWidth; c++) {
-      var tileCode = level[r][c];
+  for (var r = 0; r < level.height; r++) {
+    for (var c = 0; c < level.width; c++) {
+      var tileCode = level.map[getLocation(level, r, c)];
       switch (tileCode) {
-        case " ":
+        case SPACE:
           break;
-        case "1": case "2":
-          drawDiamond(r, c, snakeToColor[tileCode]);
+        case WALL:
+          drawRect(r, c, "#fff");
           break;
-        case "^": case ">": case "v": case "<":
-          var color = snakeToColor[findHeadSnake(r, c)];
-          drawTriangle(r, c, color, tileCode);
-          break;
-        case "$":
-          context.fillStyle = "#f0f";
-          context.beginPath();
-          context.arc((c + 0.5) * tileSize, (r + 0.5) * tileSize, tileSize/2, 0, 2*Math.PI);
-          context.fill();
-          break;
-        case "O":
-          context.fillStyle = "#fff";
-          context.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
-          break;
-        case "@":
+        case EXIT:
           drawQuarterPie(r, c, "#f00", 0);
           drawQuarterPie(r, c, "#0f0", 1);
           drawQuarterPie(r, c, "#00f", 2);
@@ -80,6 +227,34 @@ function render() {
       }
     }
   }
+
+  level.objects.forEach(function(object) {
+    switch (object.type) {
+      case "snake":
+        var lastRowcol = null
+        object.locations.forEach(function(location) {
+          var rowcol = getRowcol(level, location);
+          if (lastRowcol == null) {
+            // head
+            if (activeSnake === object.snakeIndex) {
+              drawRect(rowcol.r, rowcol.c, "#888");
+            }
+            drawDiamond(rowcol.r, rowcol.c, snakeColors[object.snakeIndex]);
+          } else {
+            // tail segment
+            var color = snakeColors[object.snakeIndex];
+            drawTriangle(rowcol.r, rowcol.c, color, getDirectionFromDifference(lastRowcol, rowcol));
+          }
+          lastRowcol = rowcol;
+        });
+        break;
+      case "fruit":
+        var rowcol = getRowcol(level, object.locations[0]);
+        drawCircle(rowcol.r, rowcol.c, "#f0f");
+        break;
+      default: throw asdf;
+    }
+  });
 
   function drawQuarterPie(r, c, fillStyle, quadrant) {
     var cx = (c + 0.5) * tileSize;
@@ -101,6 +276,16 @@ function render() {
     context.lineTo(x, y + tileSize/2);
     context.lineTo(x + tileSize/2, y);
     context.fill();
+  }
+  function drawCircle(r, c, fillStyle) {
+    context.fillStyle = fillStyle;
+    context.beginPath();
+    context.arc((c + 0.5) * tileSize, (r + 0.5) * tileSize, tileSize/2, 0, 2*Math.PI);
+    context.fill();
+  }
+  function drawRect(r, c, fillStyle) {
+    context.fillStyle = fillStyle;
+    context.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
   }
   function drawTriangle(r, c, fillStyle, tileCode) {
     var x = c * tileSize;
@@ -148,27 +333,14 @@ function render() {
   }
 }
 
-function findHeadSnake(r, c) {
-  while (true) {
-    var tileCode = level[r][c];
-    switch (tileCode) {
-      case "1": case "2":
-        return tileCode;
-      case "^":
-        r--;
-        continue;
-      case "v":
-        r++;
-        continue;
-      case "<":
-        c--;
-        continue;
-      case ">":
-        c++;
-        continue;
-    }
-    throw asdf;
-  }
+function getDirectionFromDifference(toRowcol, fromRowcol) {
+  var dr = toRowcol.r - fromRowcol.r;
+  var dc = toRowcol.c - fromRowcol.c;
+  if      (dr ===  0 && dc ===  1) return ">";
+  else if (dr ===  0 && dc === -1) return "<";
+  else if (dr ===  1 && dc ===  0) return "v";
+  else if (dr === -1 && dc ===  0) return "^";
+  else throw asdf;
 }
 
 render();
