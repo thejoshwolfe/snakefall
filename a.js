@@ -125,6 +125,7 @@ function loadLevel(serialLevel) {
       type: type,
       locations: locations,
       snakeIndex: snakeIndex,
+      snakeColor: snakeIndex,
     };
 
     function findHead() {
@@ -363,6 +364,7 @@ function render() {
     switch (object.type) {
       case "snake":
         var lastRowcol = null
+        var color = snakeColors[object.snakeColor];
         object.locations.forEach(function(location) {
           var rowcol = getRowcol(level, location);
           if (lastRowcol == null) {
@@ -370,10 +372,9 @@ function render() {
             if (activeSnake === object.snakeIndex) {
               drawRect(rowcol.r, rowcol.c, "#888");
             }
-            drawDiamond(rowcol.r, rowcol.c, snakeColors[object.snakeIndex]);
+            drawDiamond(rowcol.r, rowcol.c, color);
           } else {
             // tail segment
-            var color = snakeColors[object.snakeIndex];
             drawTriangle(rowcol.r, rowcol.c, color, getDirectionFromDifference(lastRowcol, rowcol));
           }
           lastRowcol = rowcol;
