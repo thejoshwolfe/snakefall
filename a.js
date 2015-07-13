@@ -44,7 +44,7 @@ var level1 = {
 };
 var tileSize = 30;
 var level;
-var undoBuffer = [];
+var unmoveBuffer = [];
 loadLevel(level1);
 function loadLevel(serialLevel) {
   var result = {
@@ -87,6 +87,8 @@ function loadLevel(serialLevel) {
   level = result;
   canvas.width = tileSize * level.width;
   canvas.height = tileSize * level.height;
+  pushUnmoveFrame();
+  return;
 
   function newFruit(r, c) {
     return {
@@ -147,13 +149,41 @@ function loadLevel(serialLevel) {
   }
 }
 
-function saveState() {
-  undoBuffer.push(JSON.stringify(level.objects));
+function pushUnmoveFrame() {
+  if (unmoveBuffer.length !== 0) {
+    if (deepEquals(JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]), level.objects)) return;
+  }
+  unmoveBuffer.push(JSON.stringify(level.objects));
 }
-function undo() {
-  if (undoBuffer.length === 0) return;
-  level.objects = JSON.parse(undoBuffer.pop());
+function unmove() {
+  if (unmoveBuffer.length <= 1) return;
+  unmoveBuffer.pop(); // that was the current state
+  level.objects = JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]);
   render();
+}
+
+function deepEquals(a, b) {
+  if (a == null) return b == null;
+  if (typeof a === "string" || typeof a === "number") return a === b;
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!deepEquals(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  // must be objects
+  var aKeys = Object.keys(a);
+  var bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  aKeys.sort();
+  bKeys.sort();
+  if (!deepEquals(aKeys, bKeys)) return false;
+  for (var i = 0; i < aKeys.length; i++) {
+    if (!deepEquals(a[aKeys[i]], b[bKeys[i]])) return false;
+  }
+  return true;
 }
 
 function validateSerialRectangle(outProperties, table) {
@@ -168,8 +198,7 @@ function validateSerialRectangle(outProperties, table) {
 }
 
 function getLocation(level, r, c) {
-  if (c < 0 || c >= level.width) throw asdf;
-  if (r < 0 || r >= level.height) throw asdf;
+  if (!isInBounds(level, r, c)) throw asdf;
   return r * level.width + c;
 }
 function getRowcol(level, location) {
@@ -177,6 +206,11 @@ function getRowcol(level, location) {
   var r = Math.floor(location / level.width);
   var c = location % level.width;
   return {r:r, c:c};
+}
+function isInBounds(level, r, c) {
+  if (c < 0 || c >= level.width) return false;;
+  if (r < 0 || r >= level.height) return false;;
+  return true;
 }
 
 document.addEventListener("keydown", function(event) {
@@ -197,7 +231,7 @@ document.addEventListener("keydown", function(event) {
       move(1, 0);
       break;
     case 8:  // backspace
-      undo();
+      unmove();
       break;
     case 32: // space
     case 9:  // tab
@@ -211,11 +245,28 @@ function move(dr, dc) {
   var snake = findActiveSnake();
   var headRowcol = getRowcol(level, snake.locations[0]);
   var newRowcol = {r:headRowcol.r + dr, c:headRowcol.c + dc};
+  if (!isInBounds(level, newRowcol.r, newRowcol.c)) return;
+  var newLocation = getLocation(level, newRowcol.r, newRowcol.c);
+  var ate = false;
 
-  // do it
-  saveState();
-  snake.locations.unshift(getLocation(level, newRowcol.r, newRowcol.c));
-  snake.locations.pop();
+  var newTile = level.map[newLocation];
+  if (!(newTile === SPACE || newTile === EXIT)) return;
+  var otherObject = findObjectAtLocation(newLocation);
+  if (otherObject != null) {
+    if (otherObject.type !== "fruit") return;
+    // eat
+    var index = level.objects.indexOf(otherObject);
+    level.objects.splice(index, 1);
+    ate = true;
+  }
+
+  // move to empty space
+  snake.locations.unshift(newLocation);
+  if (!ate) {
+    snake.locations.pop();
+  }
+
+  pushUnmoveFrame();
   render();
 }
 
@@ -225,6 +276,15 @@ function findActiveSnake() {
     if (object.type === "snake" && object.snakeIndex === activeSnake) return object;
   }
   throw asdf;
+}
+
+function findObjectAtLocation(location) {
+  for (var i = 0; i < level.objects.length; i++) {
+    var object = level.objects[i];
+    if (object.locations.indexOf(location) !== -1)
+      return object;
+  }
+  return null;
 }
 
 var snakeColors = [
