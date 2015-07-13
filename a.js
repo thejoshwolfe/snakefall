@@ -44,6 +44,7 @@ var level1 = {
 };
 var tileSize = 30;
 var level;
+var undoBuffer = [];
 loadLevel(level1);
 function loadLevel(serialLevel) {
   var result = {
@@ -146,6 +147,15 @@ function loadLevel(serialLevel) {
   }
 }
 
+function saveState() {
+  undoBuffer.push(JSON.stringify(level.objects));
+}
+function undo() {
+  if (undoBuffer.length === 0) return;
+  level.objects = JSON.parse(undoBuffer.pop());
+  render();
+}
+
 function validateSerialRectangle(outProperties, table) {
   outProperties.height = table.length;
   table.forEach(function(row) {
@@ -187,6 +197,7 @@ document.addEventListener("keydown", function(event) {
       move(1, 0);
       break;
     case 8:  // backspace
+      undo();
       break;
     case 32: // space
     case 9:  // tab
@@ -200,6 +211,9 @@ function move(dr, dc) {
   var snake = findActiveSnake();
   var headRowcol = getRowcol(level, snake.locations[0]);
   var newRowcol = {r:headRowcol.r + dr, c:headRowcol.c + dc};
+
+  // do it
+  saveState();
   snake.locations.unshift(getLocation(level, newRowcol.r, newRowcol.c));
   snake.locations.pop();
   render();
