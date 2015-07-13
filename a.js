@@ -52,10 +52,10 @@ function loadLevel(serialLevel) {
     objects: [],
     width: null,
     height: null,
-    snakeCount: 0,
   };
   validateSerialRectangle(result, serialLevel.map);
   var objectsByKey = {};
+  var snakeCount = 0;
   serialLevel.map.forEach(function(row, r) {
     row.split("").forEach(function(tileCode, c) {
       if (tileCode === " ") {
@@ -102,8 +102,8 @@ function loadLevel(serialLevel) {
     var snakeIndex = null;
     if (serialObjectSpec.type === "snake") {
       type = "snake";
-      snakeIndex = result.snakeCount;
-      result.snakeCount += 1;
+      snakeIndex = snakeCount;
+      snakeCount++;
     } else {
       throw asdf;
     }
@@ -235,7 +235,7 @@ document.addEventListener("keydown", function(event) {
       break;
     case 32: // space
     case 9:  // tab
-      activeSnake = (activeSnake + 1) % level.snakeCount;
+      activeSnake = (activeSnake + 1) % countSnakes();
       break;
   }
   render();
@@ -255,8 +255,7 @@ function move(dr, dc) {
   if (otherObject != null) {
     if (otherObject.type !== "fruit") return;
     // eat
-    var index = level.objects.indexOf(otherObject);
-    level.objects.splice(index, 1);
+    removeObject(otherObject);
     ate = true;
   }
 
@@ -266,10 +265,37 @@ function move(dr, dc) {
     snake.locations.pop();
   }
 
+  // check for exit
+  if (newTile === EXIT) {
+    removeObject(snake);
+    var snakeCount = 0;
+    // reindex snakes
+    for (var i = 0; i < level.objects.length; i++) {
+      var object = level.objects[i];
+      if (object.type === "snake") {
+        object.snakeIndex = snakeCount;
+        snakeCount++;
+      }
+    }
+    if (snakeCount === 0) {
+      render();
+      alert("you win!");
+      // TODO: reset();
+    } else {
+      if (activeSnake === snakeCount) {
+        activeSnake = 0;
+      }
+    }
+  }
+
   pushUnmoveFrame();
   render();
 }
 
+function removeObject(object) {
+  var index = level.objects.indexOf(object);
+  level.objects.splice(index, 1);
+}
 function findActiveSnake() {
   for (var i = 0; i < level.objects.length; i++) {
     var object = level.objects[i];
@@ -277,7 +303,6 @@ function findActiveSnake() {
   }
   throw asdf;
 }
-
 function findObjectAtLocation(location) {
   for (var i = 0; i < level.objects.length; i++) {
     var object = level.objects[i];
@@ -285,6 +310,20 @@ function findObjectAtLocation(location) {
       return object;
   }
   return null;
+}
+function countFruit() {
+  return countObjectsOfType("fruit");
+}
+function countSnakes() {
+  return countObjectsOfType("snake");
+}
+function countObjectsOfType(type) {
+  var count = 0;
+  for (var i = 0; i < level.objects.length; i++) {
+    var object = level.objects[i];
+    if (object.type === type) count++;
+  }
+  return count;
 }
 
 var snakeColors = [
@@ -309,10 +348,11 @@ function render() {
           drawRect(r, c, "#fff");
           break;
         case EXIT:
-          drawQuarterPie(r, c, "#f00", 0);
-          drawQuarterPie(r, c, "#0f0", 1);
-          drawQuarterPie(r, c, "#00f", 2);
-          drawQuarterPie(r, c, "#ff0", 3);
+          var radiusFactor = countFruit() === 0 ? 1.2 : 0.7;
+          drawQuarterPie(r, c, radiusFactor, "#f00", 0);
+          drawQuarterPie(r, c, radiusFactor, "#0f0", 1);
+          drawQuarterPie(r, c, radiusFactor, "#00f", 2);
+          drawQuarterPie(r, c, radiusFactor, "#ff0", 3);
           break;
         default: //throw asdf;
       }
@@ -347,13 +387,13 @@ function render() {
     }
   });
 
-  function drawQuarterPie(r, c, fillStyle, quadrant) {
+  function drawQuarterPie(r, c, radiusFactor, fillStyle, quadrant) {
     var cx = (c + 0.5) * tileSize;
     var cy = (r + 0.5) * tileSize;
     context.fillStyle = fillStyle;
     context.beginPath();
     context.moveTo(cx, cy);
-    context.arc(cx, cy, tileSize/2, quadrant * Math.PI/2, (quadrant + 1) * Math.PI/2);
+    context.arc(cx, cy, radiusFactor * tileSize/2, quadrant * Math.PI/2, (quadrant + 1) * Math.PI/2);
     context.fill();
   }
   function drawDiamond(r, c, fillStyle) {
