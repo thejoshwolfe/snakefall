@@ -152,12 +152,13 @@ function loadLevel(serialLevel) {
 
 function pushUnmoveFrame() {
   if (unmoveBuffer.length !== 0) {
+    // don't duplicate states
     if (deepEquals(JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]), level.objects)) return;
   }
   unmoveBuffer.push(JSON.stringify(level.objects));
 }
 function unmove() {
-  if (unmoveBuffer.length <= 1) return;
+  if (unmoveBuffer.length <= 1) return; // already at the beginning
   unmoveBuffer.pop(); // that was the current state
   level.objects = JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]);
   render();
@@ -217,6 +218,10 @@ function isInBounds(level, r, c) {
   if (r < 0 || r >= level.height) return false;;
   return true;
 }
+function offsetLocation(location, dr, dc) {
+  var rowcol = getRowcol(level, location);
+  return getLocation(level, rowcol.r + dr, rowcol.c + dc);
+}
 
 document.addEventListener("keydown", function(event) {
   if (event.shiftKey || event.ctrlKey || event.altKey) return;
@@ -256,16 +261,62 @@ function move(dr, dc) {
   var newRowcol = {r:headRowcol.r + dr, c:headRowcol.c + dc};
   if (!isInBounds(level, newRowcol.r, newRowcol.c)) return;
   var newLocation = getLocation(level, newRowcol.r, newRowcol.c);
+
   var ate = false;
+  var pushedObjects = [];
 
   var newTile = level.map[newLocation];
-  if (!(newTile === SPACE || newTile === EXIT)) return;
+  if (!isTileCodeAir(newTile)) return;
   var otherObject = findObjectAtLocation(newLocation);
   if (otherObject != null) {
-    if (otherObject.type !== "fruit") return;
-    // eat
-    removeObject(otherObject);
-    ate = true;
+    if (otherObject === snake) return; // can't push yourself
+    if (otherObject.type === "fruit") {
+      // eat
+      removeObject(otherObject);
+      ate = true;
+    } else {
+      // push objects
+      pushedObjects.push(otherObject);
+      // find forward locations
+      var forwardLocations = [];
+      for (var i = 0; i < pushedObjects.length; i++) {
+        otherObject = pushedObjects[i];
+        for (var j = 0; j < otherObject.locations.length; j++) {
+          var rowcol = getRowcol(level, otherObject.locations[j]);
+          var forwardRowcol = {r:rowcol.r + dr, c:rowcol.c + dc};
+          if (!isInBounds(level, forwardRowcol.r, forwardRowcol.c)) {
+            // can't push things out of bounds
+            return;
+          }
+          var forwardLocation = getLocation(level, forwardRowcol.r, forwardRowcol.c);
+          var yetAnotherObject = findObjectAtLocation(forwardLocation);
+          if (yetAnotherObject != null) {
+            if (yetAnotherObject === snake) {
+              // indirect pushing ourselves.
+              // TODO: allow this when we're only pushing the tip of our own tail.
+              return;
+            }
+            if (yetAnotherObject.type === "fruit") {
+              // can't indirectly push fruit
+              return;
+            }
+            addIfNotPresent(pushedObjects, yetAnotherObject);
+          } else {
+            addIfNotPresent(forwardLocations, forwardLocation);
+          }
+        }
+      }
+      // check forward locations
+      for (var i = 0; i < forwardLocations.length; i++) {
+        var forwardLocation = forwardLocations[i];
+        // many of these locations can be inside objects,
+        // but that means the tile must be air,
+        // and we already know pushing that object.
+        var tileCode = level.map[forwardLocation];
+        if (!isTileCodeAir(tileCode)) return; // can't push into something solid
+      }
+      // the push is go
+    }
   }
 
   // move to empty space
@@ -273,9 +324,15 @@ function move(dr, dc) {
   if (!ate) {
     snake.locations.pop();
   }
+  // push everything, too
+  pushedObjects.forEach(function(object) {
+    for (var i = 0; i < object.locations.length; i++) {
+      object.locations[i] = offsetLocation(object.locations[i], dr, dc);
+    }
+  });
 
   // check for exit
-  if (newTile === EXIT) {
+  if (newTile === EXIT && countFruit() === 0) {
     removeObject(snake);
     var snakeCount = 0;
     // reindex snakes
@@ -301,9 +358,21 @@ function move(dr, dc) {
   render();
 }
 
+function isTileCodeAir(tileCode) {
+  return tileCode === SPACE || tileCode === EXIT;
+}
+
+function addIfNotPresent(array, element) {
+  if (array.indexOf(element) !== -1) return;
+  array.push(element);
+}
 function removeObject(object) {
-  var index = level.objects.indexOf(object);
-  level.objects.splice(index, 1);
+  removeFromArray(level.objects, object);
+}
+function removeFromArray(array, element) {
+  var index = array.indexOf(element);
+  if (index === -1) throw asdf;
+  array.splice(index, 1);
 }
 function findActiveSnake() {
   for (var i = 0; i < level.objects.length; i++) {
@@ -427,11 +496,11 @@ function render() {
     context.fillStyle = fillStyle;
     context.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
   }
-  function drawTriangle(r, c, fillStyle, tileCode) {
+  function drawTriangle(r, c, fillStyle, direction) {
     var x = c * tileSize;
     var y = r * tileSize;
     var points;
-    switch (tileCode) {
+    switch (direction) {
       case "^":
         points = [
           [x + tileSize/2, y],
