@@ -276,46 +276,7 @@ function move(dr, dc) {
       ate = true;
     } else {
       // push objects
-      pushedObjects.push(otherObject);
-      // find forward locations
-      var forwardLocations = [];
-      for (var i = 0; i < pushedObjects.length; i++) {
-        otherObject = pushedObjects[i];
-        for (var j = 0; j < otherObject.locations.length; j++) {
-          var rowcol = getRowcol(level, otherObject.locations[j]);
-          var forwardRowcol = {r:rowcol.r + dr, c:rowcol.c + dc};
-          if (!isInBounds(level, forwardRowcol.r, forwardRowcol.c)) {
-            // can't push things out of bounds
-            return;
-          }
-          var forwardLocation = getLocation(level, forwardRowcol.r, forwardRowcol.c);
-          var yetAnotherObject = findObjectAtLocation(forwardLocation);
-          if (yetAnotherObject != null) {
-            if (yetAnotherObject === snake) {
-              // indirect pushing ourselves.
-              // TODO: allow this when we're only pushing the tip of our own tail.
-              return;
-            }
-            if (yetAnotherObject.type === "fruit") {
-              // can't indirectly push fruit
-              return;
-            }
-            addIfNotPresent(pushedObjects, yetAnotherObject);
-          } else {
-            addIfNotPresent(forwardLocations, forwardLocation);
-          }
-        }
-      }
-      // check forward locations
-      for (var i = 0; i < forwardLocations.length; i++) {
-        var forwardLocation = forwardLocations[i];
-        // many of these locations can be inside objects,
-        // but that means the tile must be air,
-        // and we already know pushing that object.
-        var tileCode = level.map[forwardLocation];
-        if (!isTileCodeAir(tileCode)) return; // can't push into something solid
-      }
-      // the push is go
+      if (!pushOrFallOrSomething(snake, otherObject, dr, dc, pushedObjects)) return false;
     }
   }
 
@@ -325,42 +286,116 @@ function move(dr, dc) {
     snake.locations.pop();
   }
   // push everything, too
-  pushedObjects.forEach(function(object) {
-    for (var i = 0; i < object.locations.length; i++) {
-      object.locations[i] = offsetLocation(object.locations[i], dr, dc);
-    }
-  });
+  moveObjects(pushedObjects, dr, dc);
 
-  // check for exit
-  if (countFruit() === 0) {
-    var snakes = getSnakes();
-    for (var i = 0; i < snakes.length; i++) {
-      if (level.map[snakes[i].locations[0]] === EXIT) {
-        removeObject(snakes[i]);
+  // gravity loop
+  while (true) {
+    var didAnything = false;
+
+    // check for exit
+    if (countFruit() === 0) {
+      var snakes = getSnakes();
+      for (var i = 0; i < snakes.length; i++) {
+        if (level.map[snakes[i].locations[0]] === EXIT) {
+          // (one of) you made it!
+          removeObject(snakes[i]);
+          didAnything = true;
+        }
+      }
+      // reindex snakes
+      var snakeCount = 0;
+      for (var i = 0; i < level.objects.length; i++) {
+        var object = level.objects[i];
+        if (object.type === "snake") {
+          object.snakeIndex = snakeCount;
+          snakeCount++;
+        }
+      }
+      if (snakeCount === 0) {
+        render();
+        alert("you win!");
+        reset();
+      } else {
+        if (activeSnake >= snakeCount) {
+          activeSnake = 0;
+        }
       }
     }
-    // reindex snakes
-    var snakeCount = 0;
-    for (var i = 0; i < level.objects.length; i++) {
-      var object = level.objects[i];
-      if (object.type === "snake") {
-        object.snakeIndex = snakeCount;
-        snakeCount++;
+
+    // fall
+    var fallingObjects = level.objects.filter(function(object) {
+      if (object.type === "fruit") return false;
+      if (pushOrFallOrSomething(null, object, 1, 0, [])) {
+        // this object can fall. maybe more will fall with it too. we'll check those separately.
+        return true;
       }
-    }
-    if (snakeCount === 0) {
+    });
+    if (fallingObjects.length > 0) {
+      moveObjects(fallingObjects, 1, 0);
+      didAnything = true;
+      // just for fun:
       render();
-      alert("you win!");
-      reset();
-    } else {
-      if (activeSnake >= snakeCount) {
-        activeSnake = 0;
-      }
     }
+
+
+    if (!didAnything) break;
   }
 
   pushUnmoveFrame();
   render();
+}
+
+function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects) {
+  // pusher can be null (for gravity)
+  pushedObjects.push(pushedObject);
+  // find forward locations
+  var forwardLocations = [];
+  for (var i = 0; i < pushedObjects.length; i++) {
+    pushedObject = pushedObjects[i];
+    for (var j = 0; j < pushedObject.locations.length; j++) {
+      var rowcol = getRowcol(level, pushedObject.locations[j]);
+      var forwardRowcol = {r:rowcol.r + dr, c:rowcol.c + dc};
+      if (!isInBounds(level, forwardRowcol.r, forwardRowcol.c)) {
+        // can't push things out of bounds
+        return false;
+      }
+      var forwardLocation = getLocation(level, forwardRowcol.r, forwardRowcol.c);
+      var yetAnotherObject = findObjectAtLocation(forwardLocation);
+      if (yetAnotherObject != null) {
+        if (yetAnotherObject === pusher) {
+          // indirect pushing ourselves.
+          // TODO: allow this when we're only pushing the tip of our own tail.
+          return false;
+        }
+        if (yetAnotherObject.type === "fruit") {
+          // can't indirectly push fruit
+          return false;
+        }
+        addIfNotPresent(pushedObjects, yetAnotherObject);
+      } else {
+        addIfNotPresent(forwardLocations, forwardLocation);
+      }
+    }
+  }
+  // check forward locations
+  for (var i = 0; i < forwardLocations.length; i++) {
+    var forwardLocation = forwardLocations[i];
+    // many of these locations can be inside objects,
+    // but that means the tile must be air,
+    // and we already know pushing that object.
+    var tileCode = level.map[forwardLocation];
+    if (!isTileCodeAir(tileCode)) return false; // can't push into something solid
+  }
+  // the push is go
+  return true;
+}
+
+function moveObjects(objects, dr, dc) {
+  objects.forEach(function(object) {
+    for (var i = 0; i < object.locations.length; i++) {
+      object.locations[i] = offsetLocation(object.locations[i], dr, dc);
+    }
+  });
 }
 
 function isTileCodeAir(tileCode) {
