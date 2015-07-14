@@ -16,12 +16,12 @@ var level1 = {
   map: [
     "                    ",
     "                    ",
-    "         @ C        ",
+    "         @          ",
     "                    ",
-    "      C      C      ",
-    "      >A CC B<      ",
-    "      ^$    $^<<<   ",
-    "    ##   %          ",
+    "                    ",
+    "      >A    B<  C   ",
+    "      ^     $^<<<   ",
+    "    ##C  %          ",
     "         %          ",
     "         %          ",
   ],
@@ -340,16 +340,19 @@ function move(dr, dc) {
       return true;
     });
     if (dyingObjects.length > 0) {
+      var anySnakesDied = false;
       dyingObjects.forEach(function(object) {
         if (object.type === "snake") {
           // look what you've done
           object.dead = true;
+          anySnakesDied = true;
         } else {
           // a box fell off the world
           removeObject(object);
+          removeFromArray(fallingObjects, object);
         }
       });
-      break;
+      if (anySnakesDied) break;
     }
     if (fallingObjects.length > 0) {
       moveObjects(fallingObjects, 1, 0);
