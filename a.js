@@ -126,6 +126,7 @@ function loadLevel(serialLevel) {
       locations: locations,
       snakeIndex: snakeIndex,
       snakeColor: snakeIndex,
+      dead: false, // only used for displaying dead snakes to let the user undo
     };
 
     function findHead() {
@@ -249,13 +250,16 @@ document.addEventListener("keydown", function(event) {
       break;
     case 32: // spacebar
     case 9:  // tab
-      activeSnake = (activeSnake + 1) % countSnakes();
+      if (isAlive()) {
+        activeSnake = (activeSnake + 1) % countSnakes();
+      }
       break;
   }
   render();
 });
 
 function move(dr, dc) {
+  if (!isAlive()) return;
   var snake = findActiveSnake();
   var headRowcol = getRowcol(level, snake.locations[0]);
   var newRowcol = {r:headRowcol.r + dr, c:headRowcol.c + dc};
@@ -311,38 +315,47 @@ function move(dr, dc) {
           snakeCount++;
         }
       }
-      if (snakeCount === 0) {
-        render();
-        alert("you win!");
-        reset();
-      } else {
-        if (activeSnake >= snakeCount) {
-          activeSnake = 0;
-        }
+      if (activeSnake >= snakeCount) {
+        activeSnake = 0;
       }
     }
 
     // fall
+    var dyingObjects = [];
     var fallingObjects = level.objects.filter(function(object) {
       if (object.type === "fruit") return false;
-      if (pushOrFallOrSomething(null, object, 1, 0, [])) {
+      if (pushOrFallOrSomething(null, object, 1, 0, [], dyingObjects)) {
         // this object can fall. maybe more will fall with it too. we'll check those separately.
         return true;
       }
     });
+    if (dyingObjects.length > 0) {
+      dyingObjects.forEach(function(object) {
+        if (object.type === "snake") {
+          // look what you've done
+          object.dead = true;
+        } else {
+          // a box fell off the world
+          removeObject(object);
+        }
+      });
+      break;
+    }
     if (fallingObjects.length > 0) {
       moveObjects(fallingObjects, 1, 0);
       didAnything = true;
     }
 
     if (!didAnything) break;
+    // for debugging
+    render();
   }
 
   pushUnmoveFrame();
   render();
 }
 
-function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects) {
+function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects) {
   // pusher can be null (for gravity)
   pushedObjects.push(pushedObject);
   // find forward locations
@@ -353,8 +366,15 @@ function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects) {
       var rowcol = getRowcol(level, pushedObject.locations[j]);
       var forwardRowcol = {r:rowcol.r + dr, c:rowcol.c + dc};
       if (!isInBounds(level, forwardRowcol.r, forwardRowcol.c)) {
-        // can't push things out of bounds
-        return false;
+        if (dyingObjects == null) {
+          // can't push things out of bounds
+          return false;
+        } else {
+          // this thing is going to fall out of bounds
+          addIfNotPresent(dyingObjects, pushedObject);
+          addIfNotPresent(pushedObjects, pushedObject);
+          continue;
+        }
       }
       var forwardLocation = getLocation(level, forwardRowcol.r, forwardRowcol.c);
       var yetAnotherObject = findObjectAtLocation(forwardLocation);
@@ -385,7 +405,18 @@ function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects) {
     // but that means the tile must be air,
     // and we already know pushing that object.
     var tileCode = level.map[forwardLocation];
-    if (!isTileCodeAir(tileCode)) return false; // can't push into something solid
+    if (!isTileCodeAir(tileCode)) {
+      if (dyingObjects != null) {
+        if (tileCode === SPIKE) {
+          // ouch!
+          // uh... which object was this again?
+          var deadObject = findObjectAtLocation(offsetLocation(forwardLocation, -dr, -dc));
+          addIfNotPresent(dyingObjects, deadObject);
+        }
+      }
+      // can't push into something solid
+      return false;
+    }
   }
   // the push is go
   return true;
@@ -444,6 +475,14 @@ function getObjectsOfType(type) {
     return object.type == type;
   });
 }
+function isDead() {
+  return getSnakes().filter(function(snake) {
+    return !!snake.dead;
+  }).length > 0;
+}
+function isAlive() {
+  return countSnakes() > 0 && !isDead();
+}
 
 var snakeColors = [
   "#f00",
@@ -485,6 +524,7 @@ function render() {
         var color = snakeColors[object.snakeColor];
         object.locations.forEach(function(location) {
           var rowcol = getRowcol(level, location);
+          if (object.dead) rowcol.r += 0.5;
           if (lastRowcol == null) {
             // head
             if (activeSnake === object.snakeIndex) {
@@ -505,6 +545,18 @@ function render() {
       default: throw asdf;
     }
   });
+
+  if (countSnakes() === 0) {
+    // you win banner
+    context.fillStyle = "#ff0";
+    context.font = "100px Arial";
+    context.fillText("You Win!", 0, canvas.height / 2);
+  }
+  if (isDead()) {
+    context.fillStyle = "#f00";
+    context.font = "100px Arial";
+    context.fillText("You Dead!", 0, canvas.height / 2);
+  }
 
   function drawQuarterPie(r, c, radiusFactor, fillStyle, quadrant) {
     var cx = (c + 0.5) * tileSize;
