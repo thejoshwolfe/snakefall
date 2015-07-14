@@ -20,7 +20,7 @@ var level1 = {
     "                    ",
     "                    ",
     "      AA    BB      ",
-    "      A$    $B      ",
+    "      A$    $BBBB   ",
     "    ##   %          ",
     "         %          ",
     "         %          ",
@@ -36,8 +36,8 @@ var level1 = {
     "B": {
       type: "snake",
       shape: [
-        "@<",
-        " ^",
+        "@<   ",
+        " ^<<<",
       ],
     },
   },
@@ -324,10 +324,13 @@ function move(dr, dc) {
     var dyingObjects = [];
     var fallingObjects = level.objects.filter(function(object) {
       if (object.type === "fruit") return false;
-      if (pushOrFallOrSomething(null, object, 1, 0, [], dyingObjects)) {
-        // this object can fall. maybe more will fall with it too. we'll check those separately.
-        return true;
-      }
+      var theseDyingObjects = [];
+      if (!pushOrFallOrSomething(null, object, 1, 0, [], theseDyingObjects)) return false;
+      // this object can fall. maybe more will fall with it too. we'll check those separately.
+      theseDyingObjects.forEach(function(object) {
+        addIfNotPresent(dyingObjects, object);
+      });
+      return true;
     });
     if (dyingObjects.length > 0) {
       dyingObjects.forEach(function(object) {
@@ -412,6 +415,7 @@ function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects, dyin
           // uh... which object was this again?
           var deadObject = findObjectAtLocation(offsetLocation(forwardLocation, -dr, -dc));
           addIfNotPresent(dyingObjects, deadObject);
+          continue;
         }
       }
       // can't push into something solid
