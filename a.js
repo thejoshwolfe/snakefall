@@ -575,7 +575,8 @@ function render() {
             drawDiamond(rowcol.r, rowcol.c, color);
           } else {
             // tail segment
-            drawTriangle(rowcol.r, rowcol.c, color, getDirectionFromDifference(lastRowcol, rowcol));
+            drawCircle(rowcol.r, rowcol.c, color);
+            drawRect((rowcol.r + lastRowcol.r) / 2, (rowcol.c + lastRowcol.c) / 2, color);
           }
           lastRowcol = rowcol;
         });
