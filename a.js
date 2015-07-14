@@ -667,50 +667,6 @@ function render() {
     context.fillStyle = fillStyle;
     context.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
   }
-  function drawTriangle(r, c, fillStyle, direction) {
-    var x = c * tileSize;
-    var y = r * tileSize;
-    var points;
-    switch (direction) {
-      case "^":
-        points = [
-          [x + tileSize/2, y],
-          [x + tileSize, y + tileSize],
-          [x, y + tileSize],
-        ];
-        break;
-      case "v":
-        points = [
-          [x + tileSize/2, y + tileSize],
-          [x + tileSize, y],
-          [x, y],
-        ];
-        break;
-      case ">":
-        points = [
-          [x, y],
-          [x + tileSize, y + tileSize/2],
-          [x, y + tileSize],
-        ];
-        break;
-      case "<":
-        points = [
-          [x + tileSize, y],
-          [x, y + tileSize/2],
-          [x + tileSize, y + tileSize],
-        ];
-        break;
-      default: throw asdf;
-    }
-
-    context.fillStyle = fillStyle;
-    context.beginPath();
-    context.moveTo(points[0][0], points[0][1]);
-    context.lineTo(points[1][0], points[1][1]);
-    context.lineTo(points[2][0], points[2][1]);
-    context.lineTo(points[0][0], points[0][1]);
-    context.fill();
-  }
 }
 
 function getDirectionFromDifference(toRowcol, fromRowcol) {
