@@ -19,27 +19,15 @@ var level1 = {
     "         @          ",
     "                    ",
     "                    ",
-    "      AA    BB      ",
-    "      A$    $BBBB   ",
+    "      >A    B<      ",
+    "      ^$    $^<<<   ",
     "    ##   %          ",
     "         %          ",
     "         %          ",
   ],
   objects: {
-    "A": {
-      type: "snake",
-      shape: [
-        ">@",
-        "^ ",
-      ],
-    },
-    "B": {
-      type: "snake",
-      shape: [
-        "@<   ",
-        " ^<<<",
-      ],
-    },
+    "A": {type: "snake"},
+    "B": {type: "snake"},
   },
 };
 var tileSize = 30;
@@ -47,6 +35,12 @@ var level;
 var unmoveBuffer = [];
 loadLevel(level1);
 function loadLevel(serialLevel) {
+  level = parseLevel(serialLevel);
+  canvas.width = tileSize * level.width;
+  canvas.height = tileSize * level.height;
+  pushUnmoveFrame();
+}
+function parseLevel(serialLevel) {
   var result = {
     map: [],
     objects: [],
@@ -56,6 +50,8 @@ function loadLevel(serialLevel) {
   validateSerialRectangle(result, serialLevel.map);
   var objectsByKey = {};
   var snakeCount = 0;
+  var snakeSegmentLocations = [];
+  var snakeSegmentLocationsWithHeads = [];
   serialLevel.map.forEach(function(row, r) {
     row.split("").forEach(function(tileCode, c) {
       if (tileCode === " ") {
@@ -69,6 +65,10 @@ function loadLevel(serialLevel) {
       } else if (tileCode === "$") {
         result.map.push(SPACE);
         result.objects.push(newFruit(r, c));
+      } else if ("^v<>".indexOf(tileCode) !== -1) {
+        result.map.push(SPACE);
+        // make sure these are accounted for later
+        snakeSegmentLocations.push(getLocation(result, r, c));
       } else if (/[A-Za-z]/.test(tileCode)) {
         result.map.push(SPACE);
         var object = objectsByKey[tileCode];
@@ -76,7 +76,8 @@ function loadLevel(serialLevel) {
           objectsByKey[tileCode] = object = newObject(r, c, serialLevel.objects[tileCode]);
           result.objects.push(object);
         } else {
-          // TODO: check the shape
+          if (object.type === "snake") throw asdf; // too many heads
+          // TODO: append to a block
         }
       } else {
         throw asdf;
@@ -84,11 +85,11 @@ function loadLevel(serialLevel) {
     });
   });
 
-  level = result;
-  canvas.width = tileSize * level.width;
-  canvas.height = tileSize * level.height;
-  pushUnmoveFrame();
-  return;
+  // check for stray snake segments
+  snakeSegmentLocationsWithHeads.sort();
+  if (!deepEquals(snakeSegmentLocations, snakeSegmentLocationsWithHeads)) throw asdf; // stry snake segments
+
+  return result;
 
   function newFruit(r, c) {
     return {
@@ -97,7 +98,6 @@ function loadLevel(serialLevel) {
     };
   }
   function newObject(r, c, serialObjectSpec) {
-    // TODO: align c backwards for shapes that have space in the upper-left corner
     var type;
     var snakeIndex = null;
     if (serialObjectSpec.type === "snake") {
@@ -105,21 +105,21 @@ function loadLevel(serialLevel) {
       snakeIndex = snakeCount;
       snakeCount++;
     } else {
+      // TODO: support blocks
       throw asdf;
     }
-    var shapeProperties = {width: null, height: null};
-    validateSerialRectangle(shapeProperties, serialObjectSpec.shape);
-    var localLocations = [];
-    var node = findHead();
-    localLocations.push(node);
+    var rowcols = [];
+    var node = {r:r, c:c};
+    rowcols.push(node);
     while (true) {
-      if (localLocations.length >= shapeProperties.height * shapeProperties.width) throw asdf;
+      if (rowcols.length >= result.height * result.width) throw asdf;
       node = findNextSegment(node);
       if (node == null) break;
-      localLocations.push(node);
+      rowcols.push(node);
+      snakeSegmentLocationsWithHeads.push(getLocation(result, node.r, node.c));
     }
-    var locations = localLocations.map(function(node) {
-      return getLocation(result, r + node.r, c + node.c);
+    var locations = rowcols.map(function(node) {
+      return getLocation(result, node.r, node.c);
     });
     return {
       type: type,
@@ -129,23 +129,17 @@ function loadLevel(serialLevel) {
       dead: false, // only used for displaying dead snakes to let the user undo
     };
 
-    function findHead() {
-      for (var r = 0; r < serialObjectSpec.shape.length; r++) {
-        var row = serialObjectSpec.shape[r];
-        for (var c = 0; c < row.length; c++) {
-          if (row[c] === "@") return {r:r, c:c};
-        }
-      }
-      throw asdf;
-    }
     function findNextSegment(fromNode) {
+      var matches = [];
       for (var i = 0; i < cardinalDirections.length; i++) {
         var node = {r:cardinalDirections[i].r + fromNode.r, c:cardinalDirections[i].c + fromNode.c};
-        if (node.c < 0 || node.c >= shapeProperties.width) continue;
-        if (node.r < 0 || node.r >= shapeProperties.height) continue;
-        var shapeCode = serialObjectSpec.shape[node.r][node.c];
-        if (shapeCode === cardinalDirections[i].backwards) return node;
+        if (node.c < 0 || node.c >= result.width) continue;
+        if (node.r < 0 || node.r >= result.height) continue;
+        var shapeCode = serialLevel.map[node.r][node.c];
+        if (shapeCode === cardinalDirections[i].backwards) matches.push(node);
       }
+      if (matches.length >= 2) throw asdf;
+      if (matches.length === 1) return matches[0];
       return null;
     }
   }
