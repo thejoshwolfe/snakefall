@@ -21,7 +21,7 @@ var level1 = {
     "                    ",
     "      AA    BB      ",
     "      A$    $B      ",
-    "         %          ",
+    "    ##   %          ",
     "         %          ",
     "         %          ",
   ],
@@ -505,6 +505,9 @@ function render() {
         case WALL:
           drawRect(r, c, "#fff");
           break;
+        case SPIKE:
+          drawSpikes(r, c);
+          break;
         case EXIT:
           var radiusFactor = countFruit() === 0 ? 1.2 : 0.7;
           drawQuarterPie(r, c, radiusFactor, "#f00", 0);
@@ -558,6 +561,18 @@ function render() {
     context.fillText("You Dead!", 0, canvas.height / 2);
   }
 
+  function drawSpikes(r, c) {
+    var x = c * tileSize;
+    var y = r * tileSize;
+    context.fillStyle = "#888";
+    context.beginPath();
+    context.moveTo(x, y + tileSize);
+    context.lineTo(x + tileSize * 0.25, y);
+    context.lineTo(x + tileSize * 0.5, y + tileSize);
+    context.lineTo(x + tileSize * 0.75, y);
+    context.lineTo(x + tileSize, y + tileSize);
+    context.fill();
+  }
   function drawQuarterPie(r, c, radiusFactor, fillStyle, quadrant) {
     var cx = (c + 0.5) * tileSize;
     var cy = (r + 0.5) * tileSize;
