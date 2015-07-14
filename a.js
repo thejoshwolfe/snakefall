@@ -18,7 +18,7 @@ var level1 = {
     "                    ",
     "         @          ",
     "                    ",
-    "                    ",
+    "      C      C      ",
     "      >A    B<      ",
     "      ^$    $^<<<   ",
     "    ##   %          ",
@@ -28,6 +28,7 @@ var level1 = {
   objects: {
     "A": {type: "snake"},
     "B": {type: "snake"},
+    "C": {type: "block"},
   },
 };
 var tileSize = 30;
@@ -73,11 +74,16 @@ function parseLevel(serialLevel) {
         result.map.push(SPACE);
         var object = objectsByKey[tileCode];
         if (object == null) {
-          objectsByKey[tileCode] = object = newObject(r, c, serialLevel.objects[tileCode]);
+          var serialObjectSpec = serialLevel.objects[tileCode];
+          if (serialObjectSpec == null) throw asdf; // object not specified
+          objectsByKey[tileCode] = object = newObject(r, c, serialObjectSpec);
           result.objects.push(object);
         } else {
           if (object.type === "snake") throw asdf; // too many heads
-          // TODO: append to a block
+          if (object.type === "block") {
+            // append to a block
+            object.locations.push(getLocation(result, r, c));
+          }
         }
       } else {
         throw asdf;
@@ -98,16 +104,23 @@ function parseLevel(serialLevel) {
     };
   }
   function newObject(r, c, serialObjectSpec) {
-    var type;
-    var snakeIndex = null;
     if (serialObjectSpec.type === "snake") {
-      type = "snake";
-      snakeIndex = snakeCount;
-      snakeCount++;
+      return newSnake(r, c, serialObjectSpec);
+    } else if (serialObjectSpec.type === "block") {
+      return newBlock(r, c, serialObjectSpec);
     } else {
-      // TODO: support blocks
       throw asdf;
     }
+  }
+  function newBlock(r, c, serialObjectSpec) {
+    return {
+      type: "block",
+      locations: [getLocation(result, r, c)],
+    };
+  }
+  function newSnake(r, c, serialObjectSpec) {
+    var snakeIndex = snakeCount;
+    snakeCount++;
     var rowcols = [];
     var node = {r:r, c:c};
     rowcols.push(node);
@@ -122,11 +135,11 @@ function parseLevel(serialLevel) {
       return getLocation(result, node.r, node.c);
     });
     return {
-      type: type,
+      type: "snake",
       locations: locations,
       snakeIndex: snakeIndex,
       snakeColor: snakeIndex,
-      dead: false, // only used for displaying dead snakes to let the user undo
+      dead: false,
     };
 
     function findNextSegment(fromNode) {
@@ -405,11 +418,13 @@ function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects, dyin
     if (!isTileCodeAir(tileCode)) {
       if (dyingObjects != null) {
         if (tileCode === SPIKE) {
-          // ouch!
           // uh... which object was this again?
           var deadObject = findObjectAtLocation(offsetLocation(forwardLocation, -dr, -dc));
-          addIfNotPresent(dyingObjects, deadObject);
-          continue;
+          if (deadObject.type === "snake") {
+            // ouch!
+            addIfNotPresent(dyingObjects, deadObject);
+            continue;
+          }
         }
       }
       // can't push into something solid
@@ -485,6 +500,8 @@ function isAlive() {
 var snakeColors = [
   "#f00",
   "#0f0",
+  "#00f",
+  "#ff0",
 ];
 
 var activeSnake = 0;
@@ -537,6 +554,12 @@ function render() {
             drawTriangle(rowcol.r, rowcol.c, color, getDirectionFromDifference(lastRowcol, rowcol));
           }
           lastRowcol = rowcol;
+        });
+        break;
+      case "block":
+        object.locations.forEach(function(location) {
+          var rowcol = getRowcol(level, location);
+          drawRect(rowcol.r, rowcol.c, "#800");
         });
         break;
       case "fruit":
