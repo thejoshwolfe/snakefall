@@ -333,10 +333,7 @@ function move(dr, dc) {
     if (fallingObjects.length > 0) {
       moveObjects(fallingObjects, 1, 0);
       didAnything = true;
-      // just for fun:
-      render();
     }
-
 
     if (!didAnything) break;
   }
@@ -364,7 +361,11 @@ function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects) {
       if (yetAnotherObject != null) {
         if (yetAnotherObject === pusher) {
           // indirect pushing ourselves.
-          // TODO: allow this when we're only pushing the tip of our own tail.
+          // special check for when we're indirectly pushing the tip of our own tail.
+          if (forwardLocation === pusher.locations[pusher.locations.length -1]) {
+            // for some reason this is ok.
+            continue;
+          }
           return false;
         }
         if (yetAnotherObject.type === "fruit") {
