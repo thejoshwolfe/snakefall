@@ -16,10 +16,10 @@ var level1 = {
   map: [
     "                    ",
     "                    ",
-    "         @          ",
+    "         @ C        ",
     "                    ",
     "      C      C      ",
-    "      >A    B<      ",
+    "      >A CC B<      ",
     "      ^$    $^<<<   ",
     "    ##   %          ",
     "         %          ",
@@ -511,6 +511,18 @@ function render() {
   context.fillStyle = "#000";
   context.fillRect(0, 0, canvas.width, canvas.height);
 
+  // begin by rendering the background connections for blocks
+  level.objects.forEach(function(object) {
+    if (object.type !== "block") return;
+    for (var i = 0; i < object.locations.length - 1; i++) {
+      var rowcol1 = getRowcol(level, object.locations[i]);
+      var rowcol2 = getRowcol(level, object.locations[i + 1]);
+      var cornerRowcol = {r:rowcol1.r, c:rowcol2.c};
+      drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c);
+      drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c);
+    }
+  });
+
   for (var r = 0; r < level.height; r++) {
     for (var c = 0; c < level.width; c++) {
       var tileCode = level.map[getLocation(level, r, c)];
@@ -593,6 +605,23 @@ function render() {
     context.lineTo(x + tileSize * 0.75, y);
     context.lineTo(x + tileSize, y + tileSize);
     context.fill();
+  }
+  function drawConnector(r1, c1, r2, c2) {
+    // either r1 and r2 or c1 and c2 must be equal
+    if (r1 > r2 || c1 > c2) {
+      var rTmp = r1;
+      var cTmp = c1;
+      r1 = r2;
+      c1 = c2;
+      r2 = rTmp;
+      c2 = cTmp;
+    }
+    var xLo = (c1 + 0.4) * tileSize;
+    var yLo = (r1 + 0.4) * tileSize;
+    var xHi = (c2 + 0.6) * tileSize;
+    var yHi = (r2 + 0.6) * tileSize;
+    context.fillStyle = "#400";
+    context.fillRect(xLo, yLo, xHi - xLo, yHi - yLo);
   }
   function drawQuarterPie(r, c, radiusFactor, fillStyle, quadrant) {
     var cx = (c + 0.5) * tileSize;
