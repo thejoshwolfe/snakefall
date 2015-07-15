@@ -5,6 +5,8 @@ var WALL = 1;
 var SPIKE = 2;
 var EXIT = 3;
 
+var validTileCodes = [SPACE, WALL, SPIKE, EXIT];
+
 var cardinalDirections = [
   {r: 1, c: 0, forwards:"v", backwards:"^"},
   {r:-1, c: 0, forwards:"^", backwards:"v"},
@@ -13,158 +15,108 @@ var cardinalDirections = [
 ];
 
 var level1 = {
-  map: [
-    "                         ",
-    "                         ",
-    "          %#####         ",
-    "          %              ",
-    "          %              ",
-    "          % ####         ",
-    "    @          #         ",
-    "                         ",
-    "                 A<< %   ",
-    "   %%%            a^     ",
-    "  %%%%                   ",
-    "  %%%%           B<<  %  ",
-    "   %%            $C<<    ",
-    "                  a      ",
-    "                 %%%%%   ",
-    "                 %%%%%   ",
-    "                  %%%    ",
-    "                    %    ",
+  "height": 18,
+  "width": 25,
+  "map": [
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,2,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,0,2,2,2,2,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,
+    0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,
+    0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0
   ],
-  objects: {
-    "A": {type: "snake"},
-    "B": {type: "snake"},
-    "C": {type: "snake"},
-    "a": {type: "block"},
-  },
+  "objects": [
+    {
+      "type": "snake",
+      "snakeIndex": 0,
+      "snakeColor": 0,
+      "dead": false,
+      "locations": [217,218,219,244]
+    },
+    {
+      "type": "block",
+      "locations": [243,343]
+    },
+    {
+      "type": "snake",
+      "snakeIndex": 1,
+      "snakeColor": 1,
+      "dead": false,
+      "locations": [292,293,294]
+    },
+    {
+      "type": "fruit",
+      "locations": [317]
+    },
+    {
+      "type": "snake",
+      "snakeIndex": 2,
+      "snakeColor": 2,
+      "dead": false,
+      "locations": [318,319,320]
+    }
+  ]
 };
 var tileSize = 30;
 var level;
 var unmoveBuffer = [];
-loadLevel(level1);
-function loadLevel(serialLevel) {
-  level = parseLevel(serialLevel);
+function loadLevel(newLevel) {
+  level = newLevel;
   canvas.width = tileSize * level.width;
   canvas.height = tileSize * level.height;
+  unmoveBuffer = [];
   pushUnmoveFrame();
+  render();
 }
-function parseLevel(serialLevel) {
-  var result = {
-    map: [],
-    objects: [],
-    width: null,
-    height: null,
-  };
-  validateSerialRectangle(result, serialLevel.map);
-  var objectsByKey = {};
-  var snakeCount = 0;
-  var snakeSegmentLocations = [];
-  var snakeSegmentLocationsWithHeads = [];
-  serialLevel.map.forEach(function(row, r) {
-    row.split("").forEach(function(tileCode, c) {
-      if (tileCode === " ") {
-        result.map.push(SPACE);
-      } else if (tileCode === "%") {
-        result.map.push(WALL);
-      } else if (tileCode === "#") {
-        result.map.push(SPIKE);
-      } else if (tileCode === "@") {
-        result.map.push(EXIT);
-      } else if (tileCode === "$") {
-        result.map.push(SPACE);
-        result.objects.push(newFruit(r, c));
-      } else if ("^v<>".indexOf(tileCode) !== -1) {
-        result.map.push(SPACE);
-        // make sure these are accounted for later
-        snakeSegmentLocations.push(getLocation(result, r, c));
-      } else if (/[A-Za-z]/.test(tileCode)) {
-        result.map.push(SPACE);
-        var object = objectsByKey[tileCode];
-        if (object == null) {
-          var serialObjectSpec = serialLevel.objects[tileCode];
-          if (serialObjectSpec == null) throw asdf; // object not specified
-          objectsByKey[tileCode] = object = newObject(r, c, serialObjectSpec);
-          result.objects.push(object);
-        } else {
-          if (object.type === "snake") throw asdf; // too many heads
-          if (object.type === "block") {
-            // append to a block
-            object.locations.push(getLocation(result, r, c));
-          }
-        }
-      } else {
-        throw asdf;
-      }
+function validateLevel(level) {
+  // pass/fail coherency. can we work with it at all?
+
+  // map
+  if (!Array.isArray(level.map)) throw new Error("level.map must be array");
+  if (level.height * level.width !== level.map.length) throw new Error("height, width, and map.length do not jive");
+  for (var i = 0; i < level.map.length; i++) {
+    var tileCode = level.map[i];
+    if (validTileCodes.indexOf(tileCode) === -1) throw new Error("invalid tilecode: " + JSON.stringify(tileCode));
+  }
+
+  // objects
+  if (!Array.isArray(level.objects)) throw new Error("level.objects must be array");
+  level.objects.forEach(function(object) {
+    if (!Array.isArray(object.locations)) throw new Error("object.locations must be array");
+    if (object.locations.length === 0) throw new Error("object.locations.length must be > 0");
+    object.locations.forEach(function(location) {
+      if (level.map[location] == null) throw new Error("invalid location: " + JSON.stringify(location));
     });
+    switch (object.type) {
+      case "fruit":
+        if (object.locations.length !== 1) throw new Error("a fruit object can only have a single location");
+        break;
+      case "block":
+        // it's all good
+        break;
+      case "snake":
+        if (snakeColors[object.snakeColor] == null) throw new Error("invalid snakeColor: " + JSON.stringify(object.snakeColor));
+        // TODO: we shouldn't need snakeIndex
+        if (snakeColors[object.snakeIndex] == null) throw new Error("invalid snakeIndex: " + JSON.stringify(object.snakeIndex));
+        if (typeof object.dead !== "boolean") throw new Error("invalid dead: " + JSON.stringify(object.dead));
+        break;
+      default: throw new Error("invalid object type: " + JSON.stringify(object.type));
+    }
   });
 
-  // check for stray snake segments
-  snakeSegmentLocationsWithHeads.sort();
-  if (!deepEquals(snakeSegmentLocations, snakeSegmentLocationsWithHeads)) throw asdf; // stry snake segments
-
-  return result;
-
-  function newFruit(r, c) {
-    return {
-      type: "fruit",
-      locations: [getLocation(result, r, c)],
-    };
-  }
-  function newObject(r, c, serialObjectSpec) {
-    if (serialObjectSpec.type === "snake") {
-      return newSnake(r, c, serialObjectSpec);
-    } else if (serialObjectSpec.type === "block") {
-      return newBlock(r, c, serialObjectSpec);
-    } else {
-      throw asdf;
-    }
-  }
-  function newBlock(r, c, serialObjectSpec) {
-    return {
-      type: "block",
-      locations: [getLocation(result, r, c)],
-    };
-  }
-  function newSnake(r, c, serialObjectSpec) {
-    var snakeIndex = snakeCount;
-    snakeCount++;
-    var rowcols = [];
-    var node = {r:r, c:c};
-    rowcols.push(node);
-    while (true) {
-      if (rowcols.length >= result.height * result.width) throw asdf;
-      node = findNextSegment(node);
-      if (node == null) break;
-      rowcols.push(node);
-      snakeSegmentLocationsWithHeads.push(getLocation(result, node.r, node.c));
-    }
-    var locations = rowcols.map(function(node) {
-      return getLocation(result, node.r, node.c);
-    });
-    return {
-      type: "snake",
-      locations: locations,
-      snakeIndex: snakeIndex,
-      snakeColor: snakeIndex,
-      dead: false,
-    };
-
-    function findNextSegment(fromNode) {
-      var matches = [];
-      for (var i = 0; i < cardinalDirections.length; i++) {
-        var node = {r:cardinalDirections[i].r + fromNode.r, c:cardinalDirections[i].c + fromNode.c};
-        if (node.c < 0 || node.c >= result.width) continue;
-        if (node.r < 0 || node.r >= result.height) continue;
-        var shapeCode = serialLevel.map[node.r][node.c];
-        if (shapeCode === cardinalDirections[i].backwards) matches.push(node);
-      }
-      if (matches.length >= 2) throw asdf;
-      if (matches.length === 1) return matches[0];
-      return null;
-    }
-  }
+  return level;
 }
 
 function pushUnmoveFrame() {
@@ -273,14 +225,24 @@ document.addEventListener("keydown", function(event) {
   }
   render();
 });
+document.getElementById("showHideEditor").addEventListener("click", function() {
+  persistentState.showEditor = !persistentState.showEditor;
+  savePersistentState();
+  showEditorChanged();
+});
 document.getElementById("serializationTextarea").addEventListener("keydown", function(event) {
   // let things work normally
   event.stopPropagation();
 });
-document.getElementById("showHideEditor").addEventListener("click", function() {
-  persistentState.showEditor = !persistentState.showEditor;
-  showEditorChanged();
-  savePersistentState();
+document.getElementById("submitSerializationButton").addEventListener("click", function() {
+  var string = document.getElementById("serializationTextarea").value;
+  try {
+    var newLevel = validateLevel(JSON.parse(string));
+  } catch (e) {
+    alert(e);
+    return;
+  }
+  loadLevel(newLevel);
 });
 
 var persistentState = {
@@ -747,4 +709,4 @@ function stringifyLevel(level) {
   return output;
 }
 
-render();
+loadLevel(validateLevel(level1));
