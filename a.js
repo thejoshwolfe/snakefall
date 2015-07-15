@@ -7,13 +7,6 @@ var EXIT = 3;
 
 var validTileCodes = [SPACE, WALL, SPIKE, EXIT];
 
-var cardinalDirections = [
-  {r: 1, c: 0, forwards:"v", backwards:"^"},
-  {r:-1, c: 0, forwards:"^", backwards:"v"},
-  {r: 0, c: 1, forwards:">", backwards:"<"},
-  {r: 0, c:-1, forwards:"<", backwards:">"},
-];
-
 var level1 = {
   "height": 18,
   "width": 25,
