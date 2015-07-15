@@ -26,7 +26,7 @@ var level1 = {
     "   %%%            a^     ",
     "  %%%%                   ",
     "  %%%%           B<<  %  ",
-    "   %%            C<<<    ",
+    "   %%            $C<<    ",
     "                  a      ",
     "                 %%%%%   ",
     "                 %%%%%   ",
@@ -273,6 +273,31 @@ document.addEventListener("keydown", function(event) {
   }
   render();
 });
+document.getElementById("serializationTextarea").addEventListener("keydown", function(event) {
+  // let things work normally
+  event.stopPropagation();
+});
+document.getElementById("showHideEditor").addEventListener("click", function() {
+  persistentState.showEditor = !persistentState.showEditor;
+  showEditorChanged();
+  savePersistentState();
+});
+
+var persistentState = {
+  showEditor: false,
+};
+loadPersistentState();
+function savePersistentState() {
+  localStorage.snakefall = JSON.stringify(persistentState);
+}
+function loadPersistentState() {
+  persistentState = JSON.parse(localStorage.snakefall);
+  showEditorChanged();
+}
+function showEditorChanged() {
+  document.getElementById("showHideEditor").value = (persistentState.showEditor ? "Hide" : "Show") + " Editor Stuff";
+  document.getElementById("editorDiv").style.display = persistentState.showEditor ? "block" : "none";
+}
 
 function move(dr, dc) {
   if (!isAlive()) return;
@@ -607,6 +632,9 @@ function render() {
     context.fillText("You Dead!", 0, canvas.height / 2);
   }
 
+  // serialize
+  document.getElementById("serializationTextarea").value = stringifyLevel(level);
+
   function drawSpikes(r, c) {
     var x = c * tileSize;
     var y = r * tileSize;
@@ -677,6 +705,43 @@ function getDirectionFromDifference(toRowcol, fromRowcol) {
   else if (dr ===  1 && dc ===  0) return "v";
   else if (dr === -1 && dc ===  0) return "^";
   else throw asdf;
+}
+
+function stringifyLevel(level) {
+  // we could just JSON.stringify, but that's kinda ugly
+  var output = '';
+  output +=     '{\n';
+  output +=     '  "height": ' + level.height + ',\n';
+  output +=     '  "width": '  + level.width  + ',\n';
+  output +=     '  "map": [\n';
+  for (var r = 0; r < level.height; r++) {
+    output +=   '    ' + level.map.slice(r * level.width, (r + 1) * level.width).join(',');
+    if (r < level.height - 1) output += ',';
+    output += '\n';
+  }
+  output +=     '  ],\n';
+  output +=     '  "objects": [\n';
+  for (var i = 0; i < level.objects.length; i++) {
+    var object = level.objects[i];
+    output +=   '    {\n';
+    output +=   '      "type": ' + JSON.stringify(object.type) + ',\n';
+    ["snakeIndex", "snakeColor", "dead"].forEach(function(key) {
+      if (!(key in object)) return;
+      output += '      ' + JSON.stringify(key) + ': ' + JSON.stringify(object[key]) + ',\n';
+    });
+    output +=   '      "locations": ' + JSON.stringify(object.locations) + '\n';
+    output +=   '    }';
+    if (i < level.objects.length - 1) output += ',';
+    output +=   '\n';
+  }
+  output +=     '  ]\n';
+  output +=     '}';
+
+  // sanity check
+  var shouldBeTheSame = JSON.parse(output);
+  if (!deepEquals(level, shouldBeTheSame)) throw asdf; // serialization is broken
+
+  return output;
 }
 
 render();
