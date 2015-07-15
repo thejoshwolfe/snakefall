@@ -40,7 +40,6 @@ var level1 = {
   "objects": [
     {
       "type": "snake",
-      "snakeIndex": 0,
       "snakeColor": 0,
       "dead": false,
       "locations": [217,218,219,244]
@@ -51,7 +50,6 @@ var level1 = {
     },
     {
       "type": "snake",
-      "snakeIndex": 1,
       "snakeColor": 1,
       "dead": false,
       "locations": [292,293,294]
@@ -62,7 +60,6 @@ var level1 = {
     },
     {
       "type": "snake",
-      "snakeIndex": 2,
       "snakeColor": 2,
       "dead": false,
       "locations": [318,319,320]
@@ -76,6 +73,8 @@ function loadLevel(newLevel) {
   level = newLevel;
   canvas.width = tileSize * level.width;
   canvas.height = tileSize * level.height;
+
+  activateAnySnakePlease();
   unmoveBuffer = [];
   pushUnmoveFrame();
   render();
@@ -108,8 +107,6 @@ function validateLevel(level) {
         break;
       case "snake":
         if (snakeColors[object.snakeColor] == null) throw new Error("invalid snakeColor: " + JSON.stringify(object.snakeColor));
-        // TODO: we shouldn't need snakeIndex
-        if (snakeColors[object.snakeIndex] == null) throw new Error("invalid snakeIndex: " + JSON.stringify(object.snakeIndex));
         if (typeof object.dead !== "boolean") throw new Error("invalid dead: " + JSON.stringify(object.dead));
         break;
       default: throw new Error("invalid object type: " + JSON.stringify(object.type));
@@ -219,7 +216,12 @@ document.addEventListener("keydown", function(event) {
     case 32: // spacebar
     case 9:  // tab
       if (isAlive()) {
-        activeSnake = (activeSnake + 1) % countSnakes();
+        var snakes = getSnakes();
+        for (var i = 0; i < snakes.length; i++) {
+          if (snakes[i].snakeColor !== activeSnakeColor) continue;
+          activeSnakeColor = snakes[(i + 1) % snakes.length].snakeColor;
+          break;
+        }
       }
       break;
   }
@@ -266,8 +268,8 @@ function showEditorChanged() {
 
 function move(dr, dc) {
   if (!isAlive()) return;
-  var snake = findActiveSnake();
-  var headRowcol = getRowcol(level, snake.locations[0]);
+  var activeSnake = findActiveSnake();
+  var headRowcol = getRowcol(level, activeSnake.locations[0]);
   var newRowcol = {r:headRowcol.r + dr, c:headRowcol.c + dc};
   if (!isInBounds(level, newRowcol.r, newRowcol.c)) return;
   var newLocation = getLocation(level, newRowcol.r, newRowcol.c);
@@ -279,21 +281,21 @@ function move(dr, dc) {
   if (!isTileCodeAir(newTile)) return;
   var otherObject = findObjectAtLocation(newLocation);
   if (otherObject != null) {
-    if (otherObject === snake) return; // can't push yourself
+    if (otherObject === activeSnake) return; // can't push yourself
     if (otherObject.type === "fruit") {
       // eat
       removeObject(otherObject);
       ate = true;
     } else {
       // push objects
-      if (!pushOrFallOrSomething(snake, otherObject, dr, dc, pushedObjects)) return false;
+      if (!pushOrFallOrSomething(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
     }
   }
 
   // move to empty space
-  snake.locations.unshift(newLocation);
+  activeSnake.locations.unshift(newLocation);
   if (!ate) {
-    snake.locations.pop();
+    activeSnake.locations.pop();
   }
   // push everything, too
   moveObjects(pushedObjects, dr, dc);
@@ -309,20 +311,11 @@ function move(dr, dc) {
         if (level.map[snakes[i].locations[0]] === EXIT) {
           // (one of) you made it!
           removeObject(snakes[i]);
+          if (snakes[i].snakeColor === activeSnakeColor) {
+            activateAnySnakePlease();
+          }
           didAnything = true;
         }
-      }
-      // reindex snakes
-      var snakeCount = 0;
-      for (var i = 0; i < level.objects.length; i++) {
-        var object = level.objects[i];
-        if (object.type === "snake") {
-          object.snakeIndex = snakeCount;
-          snakeCount++;
-        }
-      }
-      if (activeSnake >= snakeCount) {
-        activeSnake = 0;
       }
     }
 
@@ -437,6 +430,12 @@ function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects, dyin
   return true;
 }
 
+function activateAnySnakePlease() {
+  var snakes = getSnakes();
+  if (snakes.length === 0) return; // nope.avi
+  activeSnakeColor = snakes[0].snakeColor;
+}
+
 function moveObjects(objects, dr, dc) {
   objects.forEach(function(object) {
     for (var i = 0; i < object.locations.length; i++) {
@@ -462,9 +461,9 @@ function removeFromArray(array, element) {
   array.splice(index, 1);
 }
 function findActiveSnake() {
-  for (var i = 0; i < level.objects.length; i++) {
-    var object = level.objects[i];
-    if (object.type === "snake" && object.snakeIndex === activeSnake) return object;
+  var snakes = getSnakes();
+  for (var i = 0; i < snakes.length; i++) {
+    if (snakes[i].snakeColor === activeSnakeColor) return snakes[i];
   }
   throw asdf;
 }
@@ -506,7 +505,7 @@ var snakeColors = [
   "#ff0",
 ];
 
-var activeSnake = 0;
+var activeSnakeColor = null;
 
 function render() {
   var context = canvas.getContext("2d");
@@ -559,7 +558,7 @@ function render() {
           if (object.dead) rowcol.r += 0.5;
           if (lastRowcol == null) {
             // head
-            if (activeSnake === object.snakeIndex) {
+            if (object.snakeColor === activeSnakeColor) {
               drawRect(rowcol.r, rowcol.c, "#888");
             }
             drawDiamond(rowcol.r, rowcol.c, color);
@@ -690,7 +689,7 @@ function stringifyLevel(level) {
     var object = level.objects[i];
     output +=   '    {\n';
     output +=   '      "type": ' + JSON.stringify(object.type) + ',\n';
-    ["snakeIndex", "snakeColor", "dead"].forEach(function(key) {
+    ["snakeColor", "dead"].forEach(function(key) {
       if (!(key in object)) return;
       output += '      ' + JSON.stringify(key) + ': ' + JSON.stringify(object[key]) + ',\n';
     });
