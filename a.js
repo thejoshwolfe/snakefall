@@ -291,7 +291,10 @@ function savePersistentState() {
   localStorage.snakefall = JSON.stringify(persistentState);
 }
 function loadPersistentState() {
-  persistentState = JSON.parse(localStorage.snakefall);
+  try {
+    persistentState = JSON.parse(localStorage.snakefall);
+  } catch (e) {
+  }
   showEditorChanged();
 }
 function showEditorChanged() {
