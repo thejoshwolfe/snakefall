@@ -68,6 +68,7 @@ function loadLevel(newLevel) {
   activateAnySnakePlease();
   unmoveBuffer = [];
   pushUnmoveFrame();
+  pushUneditFrame();
   render();
 }
 function validateLevel(level) {
@@ -214,6 +215,9 @@ document.addEventListener("keydown", function(event) {
     case "F".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode("fruit"); break; }
       return;
+    case "D".charCodeAt(0):
+      if (modifierMask === 0) { setPaintBrushTileCode("snake"); break; }
+      return;
     case 32: // spacebar
     case 9:  // tab
       if (modifierMask === 0) {
@@ -254,12 +258,15 @@ document.getElementById("submitSerializationButton").addEventListener("click", f
 });
 
 var paintBrushTileCode = null;
+var paintBrushSnakeColorIndex = 0;
+var paintBrushObject = null;
 var paintButtonIdAndTileCodes = [
   ["paintSpaceButton", SPACE],
   ["paintWallButton",  WALL],
   ["paintSpikeButton", SPIKE],
   ["paintExitButton", EXIT],
   ["paintFruitButton", "fruit"],
+  ["paintSnakeButton", "snake"],
 ];
 paintButtonIdAndTileCodes.forEach(function(pair) {
   var id = pair[0];
@@ -278,6 +285,7 @@ canvas.addEventListener("mousedown", function(event) {
 });
 document.addEventListener("mouseup", function(event) {
   dragging = false;
+  paintBrushObject = null;
   pushUneditFrame();
 });
 canvas.addEventListener("mousemove", function(event) {
@@ -286,6 +294,12 @@ canvas.addEventListener("mousemove", function(event) {
 function eventToMouseX(event, canvas) { return event.clientX - canvas.getBoundingClientRect().left; }
 function eventToMouseY(event, canvas) { return event.clientY - canvas.getBoundingClientRect().top; }
 function setPaintBrushTileCode(tileCode) {
+  if (tileCode === "snake") {
+    if (paintBrushTileCode === "snake") {
+      // next snake color
+      paintBrushSnakeColorIndex = (paintBrushSnakeColorIndex + 1) % snakeColors.length;
+    }
+  }
   paintBrushTileCode = tileCode;
   paintBrushTileCodeChanged();
 }
@@ -293,7 +307,15 @@ function paintBrushTileCodeChanged() {
   paintButtonIdAndTileCodes.forEach(function(pair) {
     var id = pair[0];
     var tileCode = pair[1];
-    document.getElementById(id).style.background = tileCode === paintBrushTileCode ? "#ff0" : "";
+    var backgroundStyle = "";
+    if (tileCode === paintBrushTileCode) {
+      if (tileCode === "snake") {
+        backgroundStyle = snakeColors[paintBrushSnakeColorIndex];
+      } else {
+        backgroundStyle = "#ff0";
+      }
+    }
+    document.getElementById(id).style.background = backgroundStyle;
   });
 }
 function paintAtEventLocation(event) {
@@ -304,9 +326,22 @@ function paintAtEventLocation(event) {
   if (typeof paintBrushTileCode === "number") {
     if (objectHere == null && level.map[location] === paintBrushTileCode) return;
   } else if (typeof paintBrushTileCode === "string") {
-    if (objectHere != null && objectHere.type === paintBrushTileCode) return;
+    if (objectHere != null && objectHere.type === paintBrushTileCode) {
+      if (paintBrushTileCode === "fruit") {
+        // all fruit is the same
+        return;
+      } else if (paintBrushTileCode === "snake") {
+        if (objectHere.snakeColor === paintBrushSnakeColorIndex) return;
+      }
+    }
   }
   if (objectHere != null) removeObject(objectHere);
+  if (paintBrushTileCode === "snake" && paintBrushObject == null) {
+    // new snake. make sure any old snake of the same color is gone.
+    var oldSnake = findSnakeOfColor(paintBrushSnakeColorIndex);
+    if (oldSnake != null) removeObject(oldSnake);
+  }
+
   if (typeof paintBrushTileCode === "number") {
     level.map[location] = paintBrushTileCode;
     if (paintBrushTileCode === EXIT) {
@@ -317,16 +352,33 @@ function paintAtEventLocation(event) {
       }
     }
   } else if (typeof paintBrushTileCode === "string") {
-    var newObject = {
-      "type": "fruit",
-    };
+    // make sure there's space behind us
+    level.map[location] = SPACE;
     switch (paintBrushTileCode) {
       case "fruit":
-        newObject.locations = [location];
+        var newObject = {
+          type: paintBrushTileCode,
+          locations: [location],
+        };
+        level.objects.push(newObject);
+        break;
+      case "snake":
+        if (paintBrushObject == null) {
+          paintBrushObject = {
+            type: paintBrushTileCode,
+            snakeColor: paintBrushSnakeColorIndex,
+            dead: false,
+            locations: [location],
+          };
+          level.objects.push(paintBrushObject);
+        } else {
+          // extend le snake
+          if (paintBrushObject.locations[0] === location) return;
+          paintBrushObject.locations.unshift(location);
+        }
         break;
       default: throw asdf;
     }
-    level.objects.push(newObject);
   }
   render();
 }
@@ -413,9 +465,6 @@ function move(dr, dc) {
         if (level.map[snakes[i].locations[0]] === EXIT) {
           // (one of) you made it!
           removeObject(snakes[i]);
-          if (snakes[i].snakeColor === activeSnakeColor) {
-            activateAnySnakePlease();
-          }
           didAnything = true;
         }
       }
@@ -556,6 +605,9 @@ function addIfNotPresent(array, element) {
 }
 function removeObject(object) {
   removeFromArray(level.objects, object);
+  if (object.type === "snake" && object.snakeColor === activeSnakeColor) {
+    activateAnySnakePlease();
+  }
 }
 function removeFromArray(array, element) {
   var index = array.indexOf(element);
@@ -568,6 +620,13 @@ function findActiveSnake() {
     if (snakes[i].snakeColor === activeSnakeColor) return snakes[i];
   }
   throw asdf;
+}
+function findSnakeOfColor(snakeColor) {
+  var snakes = getSnakes();
+  for (var i = 0; i < snakes.length; i++) {
+    if (snakes[i].snakeColor === snakeColor) return snakes[i];
+  }
+  return null;
 }
 function findObjectAtLocation(location) {
   for (var i = 0; i < level.objects.length; i++) {
