@@ -169,57 +169,68 @@ function offsetLocation(location, dr, dc) {
   return getLocation(level, rowcol.r + dr, rowcol.c + dc);
 }
 
+var SHIFT = 1;
+var CTRL = 2;
+var ALT = 4;
 document.addEventListener("keydown", function(event) {
-  if (event.shiftKey || event.ctrlKey || event.altKey) return;
-  if (event.keyCode > 90) return; // F5 etc.
-  event.preventDefault();
+  var modifierMask = (
+    (event.shiftKey ? SHIFT : 0) |
+    (event.ctrlKey ? CTRL : 0) |
+    (event.altKey ? ALT : 0)
+  );
   switch (event.keyCode) {
     case 37: // left
-      move(0, -1);
-      break;
+      if (modifierMask === 0) { move(0, -1); break; }
+      return;
     case 38: // up
-      move(-1, 0);
-      break;
+      if (modifierMask === 0) { move(-1, 0); break; }
+      return;
     case 39: // right
-      move(0, 1);
-      break;
+      if (modifierMask === 0) { move(0, 1); break; }
+      return;
     case 40: // down
-      move(1, 0);
-      break;
+      if (modifierMask === 0) { move(1, 0); break; }
+      return;
     case 8:  // backspace
     case "Z".charCodeAt(0):
-      unmove();
-      break;
+      if (modifierMask === 0) { unmove(); break; }
+      else if (modifierMask === CTRL) { unedit(); break; }
+      return;
     case "R".charCodeAt(0):
-      reset();
-      break;
+      if (modifierMask === 0) { reset(); break; }
+      return;
     case "E".charCodeAt(0):
-      setPaintBrushTileCode(SPACE);
-      break;
+      if (modifierMask === 0) { setPaintBrushTileCode(SPACE); break; }
+      return;
     case "W".charCodeAt(0):
-      setPaintBrushTileCode(WALL);
-      break;
+      if (modifierMask === 0) { setPaintBrushTileCode(WALL); break; }
+      return;
     case "S".charCodeAt(0):
-      setPaintBrushTileCode(SPIKE);
-      break;
+      if (modifierMask === 0) { setPaintBrushTileCode(SPIKE); break; }
+      return;
     case "X".charCodeAt(0):
-      setPaintBrushTileCode(EXIT);
-      break;
+      if (modifierMask === 0) { setPaintBrushTileCode(EXIT); break; }
+      return;
     case "F".charCodeAt(0):
-      setPaintBrushTileCode("fruit");
-      break;
+      if (modifierMask === 0) { setPaintBrushTileCode("fruit"); break; }
+      return;
     case 32: // spacebar
     case 9:  // tab
-      if (isAlive()) {
-        var snakes = getSnakes();
-        for (var i = 0; i < snakes.length; i++) {
-          if (snakes[i].snakeColor !== activeSnakeColor) continue;
-          activeSnakeColor = snakes[(i + 1) % snakes.length].snakeColor;
-          break;
+      if (modifierMask === 0) {
+        if (isAlive()) {
+          var snakes = getSnakes();
+          for (var i = 0; i < snakes.length; i++) {
+            if (snakes[i].snakeColor !== activeSnakeColor) continue;
+            activeSnakeColor = snakes[(i + 1) % snakes.length].snakeColor;
+            break;
+          }
         }
+        break;
       }
-      break;
+      return;
+    default: return;
   }
+  event.preventDefault();
   render();
 });
 document.getElementById("showHideEditor").addEventListener("click", function() {
@@ -267,7 +278,7 @@ canvas.addEventListener("mousedown", function(event) {
 });
 document.addEventListener("mouseup", function(event) {
   dragging = false;
-  // TODO: push unedit frame
+  pushUneditFrame();
 });
 canvas.addEventListener("mousemove", function(event) {
   if (dragging) paintAtEventLocation(event);
@@ -317,6 +328,21 @@ function paintAtEventLocation(event) {
     }
     level.objects.push(newObject);
   }
+  render();
+}
+
+var uneditBuffer = [];
+function pushUneditFrame() {
+  if (uneditBuffer.length !== 0) {
+    // don't duplicate states
+    if (deepEquals(JSON.parse(uneditBuffer[uneditBuffer.length - 1]), level)) return;
+  }
+  uneditBuffer.push(JSON.stringify(level));
+}
+function unedit() {
+  if (uneditBuffer.length <= 1) return; // already at the beginning
+  uneditBuffer.pop(); // that was the current state
+  level = JSON.parse(uneditBuffer[uneditBuffer.length - 1]);
   render();
 }
 
