@@ -171,7 +171,7 @@ function offsetLocation(location, dr, dc) {
 
 document.addEventListener("keydown", function(event) {
   if (event.shiftKey || event.ctrlKey || event.altKey) return;
-  if (event.keyCode > 90) return;
+  if (event.keyCode > 90) return; // F5 etc.
   event.preventDefault();
   switch (event.keyCode) {
     case 37: // left
@@ -187,11 +187,20 @@ document.addEventListener("keydown", function(event) {
       move(1, 0);
       break;
     case 8:  // backspace
-    case 90: // z
+    case "Z".charCodeAt(0):
       unmove();
       break;
-    case 82: // r
+    case "R".charCodeAt(0):
       reset();
+      break;
+    case "E".charCodeAt(0):
+      setPaintBrushTileCode(SPACE);
+      break;
+    case "W".charCodeAt(0):
+      setPaintBrushTileCode(WALL);
+      break;
+    case "S".charCodeAt(0):
+      setPaintBrushTileCode(SPIKE);
       break;
     case 32: // spacebar
     case 9:  // tab
@@ -228,15 +237,16 @@ document.getElementById("submitSerializationButton").addEventListener("click", f
 });
 
 var paintBrushTileCode = null;
-[
+var paintButtonIdAndTileCodes = [
   ["paintSpaceButton", SPACE],
   ["paintWallButton",  WALL],
   ["paintSpikeButton", SPIKE],
-].forEach(function(pair) {
+];
+paintButtonIdAndTileCodes.forEach(function(pair) {
   var id = pair[0];
   var tileCode = pair[1];
   document.getElementById(id).addEventListener("click", function() {
-    paintBrushTileCode = tileCode;
+    setPaintBrushTileCode(tileCode);
   });
 });
 var dragging = false;
@@ -253,6 +263,19 @@ document.addEventListener("mouseup", function(event) {
 canvas.addEventListener("mousemove", function(event) {
   if (dragging) paintAtEventLocation(event);
 });
+function eventToMouseX(event, canvas) { return event.clientX - canvas.getBoundingClientRect().left; }
+function eventToMouseY(event, canvas) { return event.clientY - canvas.getBoundingClientRect().top; }
+function setPaintBrushTileCode(tileCode) {
+  paintBrushTileCode = tileCode;
+  paintBrushTileCodeChanged();
+}
+function paintBrushTileCodeChanged() {
+  paintButtonIdAndTileCodes.forEach(function(pair) {
+    var id = pair[0];
+    var tileCode = pair[1];
+    document.getElementById(id).style.background = tileCode === paintBrushTileCode ? "#ff0" : "";
+  });
+}
 function paintAtEventLocation(event) {
   var r = Math.floor(eventToMouseY(event, canvas) / tileSize);
   var c = Math.floor(eventToMouseX(event, canvas) / tileSize);
@@ -262,8 +285,6 @@ function paintAtEventLocation(event) {
   // TODO: push unedit frame
   render();
 }
-function eventToMouseX(event, canvas) { return event.clientX - canvas.getBoundingClientRect().left; }
-function eventToMouseY(event, canvas) { return event.clientY - canvas.getBoundingClientRect().top; }
 
 var persistentState = {
   showEditor: false,
