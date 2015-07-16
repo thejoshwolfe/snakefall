@@ -1,6 +1,15 @@
 <html>
   <body>
-    <canvas id="canvas" width=750 height=600></canvas>
+    <table><tr>
+      <td><canvas id="canvas" width=750 height=600></canvas></td>
+      <td id="editorPane" style="display:none;">
+        <table>
+          <tr><td><input type="button" id="paintSpaceButton" value="Space"></td></tr>
+          <tr><td><input type="button" id="paintWallButton" value="Wall"></td></tr>
+          <tr><td><input type="button" id="paintSpikeButton" value="Spike"></td></tr>
+        </table>
+      </td>
+    </tr></table>
     <div>Controls: Arrows to move, Spacebar to switch snakes, Backspace to unmove, R to restart.</div>
 
     <input id="showHideEditor" type="button" value="Show Editor Stuff">

@@ -64,8 +64,6 @@ var level;
 var unmoveBuffer = [];
 function loadLevel(newLevel) {
   level = newLevel;
-  canvas.width = tileSize * level.width;
-  canvas.height = tileSize * level.height;
 
   activateAnySnakePlease();
   unmoveBuffer = [];
@@ -151,17 +149,6 @@ function deepEquals(a, b) {
   return true;
 }
 
-function validateSerialRectangle(outProperties, table) {
-  outProperties.height = table.length;
-  table.forEach(function(row) {
-    if (outProperties.width === null) {
-      outProperties.width = row.length;
-    } else {
-      if (outProperties.width !== row.length) throw asdf;
-    }
-  });
-}
-
 function getLocation(level, r, c) {
   if (!isInBounds(level, r, c)) throw asdf;
   return r * level.width + c;
@@ -240,10 +227,47 @@ document.getElementById("submitSerializationButton").addEventListener("click", f
   loadLevel(newLevel);
 });
 
+var paintBrushTileCode = null;
+[
+  ["paintSpaceButton", SPACE],
+  ["paintWallButton",  WALL],
+  ["paintSpikeButton", SPIKE],
+].forEach(function(pair) {
+  var id = pair[0];
+  var tileCode = pair[1];
+  document.getElementById(id).addEventListener("click", function() {
+    paintBrushTileCode = tileCode;
+  });
+});
+var dragging = false;
+canvas.addEventListener("mousedown", function(event) {
+  if (event.altKey) return;
+  if (!persistentState.showEditor || paintBrushTileCode == null) return;
+  event.preventDefault();
+  dragging = true;
+  paintAtEventLocation(event);
+});
+document.addEventListener("mouseup", function(event) {
+  dragging = false;
+});
+canvas.addEventListener("mousemove", function(event) {
+  if (dragging) paintAtEventLocation(event);
+});
+function paintAtEventLocation(event) {
+  var r = Math.floor(eventToMouseY(event, canvas) / tileSize);
+  var c = Math.floor(eventToMouseX(event, canvas) / tileSize);
+  var location = getLocation(level, r, c);
+  if (level.map[location] === paintBrushTileCode) return;
+  level.map[location] = paintBrushTileCode;
+  // TODO: push unedit frame
+  render();
+}
+function eventToMouseX(event, canvas) { return event.clientX - canvas.getBoundingClientRect().left; }
+function eventToMouseY(event, canvas) { return event.clientY - canvas.getBoundingClientRect().top; }
+
 var persistentState = {
   showEditor: false,
 };
-loadPersistentState();
 function savePersistentState() {
   localStorage.snakefall = JSON.stringify(persistentState);
 }
@@ -256,7 +280,11 @@ function loadPersistentState() {
 }
 function showEditorChanged() {
   document.getElementById("showHideEditor").value = (persistentState.showEditor ? "Hide" : "Show") + " Editor Stuff";
-  document.getElementById("editorDiv").style.display = persistentState.showEditor ? "block" : "none";
+  ["editorDiv", "editorPane"].forEach(function(id) {
+    document.getElementById(id).style.display = persistentState.showEditor ? "block" : "none";
+  });
+
+  render();
 }
 
 function move(dr, dc) {
@@ -501,6 +529,9 @@ var snakeColors = [
 var activeSnakeColor = null;
 
 function render() {
+  if (level == null) return;
+  canvas.width = tileSize * level.width;
+  canvas.height = tileSize * level.height;
   var context = canvas.getContext("2d");
   context.fillStyle = "#000";
   context.fillRect(0, 0, canvas.width, canvas.height);
@@ -701,4 +732,5 @@ function stringifyLevel(level) {
   return output;
 }
 
+loadPersistentState();
 loadLevel(validateLevel(level1));
