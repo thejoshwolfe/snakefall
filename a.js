@@ -202,6 +202,9 @@ document.addEventListener("keydown", function(event) {
     case "S".charCodeAt(0):
       setPaintBrushTileCode(SPIKE);
       break;
+    case "X".charCodeAt(0):
+      setPaintBrushTileCode(EXIT);
+      break;
     case 32: // spacebar
     case 9:  // tab
       if (isAlive()) {
@@ -241,6 +244,7 @@ var paintButtonIdAndTileCodes = [
   ["paintSpaceButton", SPACE],
   ["paintWallButton",  WALL],
   ["paintSpikeButton", SPIKE],
+  ["paintExitButton", EXIT],
 ];
 paintButtonIdAndTileCodes.forEach(function(pair) {
   var id = pair[0];
@@ -282,6 +286,13 @@ function paintAtEventLocation(event) {
   var location = getLocation(level, r, c);
   if (level.map[location] === paintBrushTileCode) return;
   level.map[location] = paintBrushTileCode;
+  if (paintBrushTileCode === EXIT) {
+    // delete any other exits
+    for (var i = 0; i < level.map.length; i++) {
+      if (i === location) continue;
+      if (level.map[i] === EXIT) level.map[i] = SPACE;
+    }
+  }
   // TODO: push unedit frame
   render();
 }
