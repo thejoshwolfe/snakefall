@@ -205,6 +205,9 @@ document.addEventListener("keydown", function(event) {
     case "X".charCodeAt(0):
       setPaintBrushTileCode(EXIT);
       break;
+    case "F".charCodeAt(0):
+      setPaintBrushTileCode("fruit");
+      break;
     case 32: // spacebar
     case 9:  // tab
       if (isAlive()) {
@@ -245,6 +248,7 @@ var paintButtonIdAndTileCodes = [
   ["paintWallButton",  WALL],
   ["paintSpikeButton", SPIKE],
   ["paintExitButton", EXIT],
+  ["paintFruitButton", "fruit"],
 ];
 paintButtonIdAndTileCodes.forEach(function(pair) {
   var id = pair[0];
@@ -263,6 +267,7 @@ canvas.addEventListener("mousedown", function(event) {
 });
 document.addEventListener("mouseup", function(event) {
   dragging = false;
+  // TODO: push unedit frame
 });
 canvas.addEventListener("mousemove", function(event) {
   if (dragging) paintAtEventLocation(event);
@@ -284,16 +289,34 @@ function paintAtEventLocation(event) {
   var r = Math.floor(eventToMouseY(event, canvas) / tileSize);
   var c = Math.floor(eventToMouseX(event, canvas) / tileSize);
   var location = getLocation(level, r, c);
-  if (level.map[location] === paintBrushTileCode) return;
-  level.map[location] = paintBrushTileCode;
-  if (paintBrushTileCode === EXIT) {
-    // delete any other exits
-    for (var i = 0; i < level.map.length; i++) {
-      if (i === location) continue;
-      if (level.map[i] === EXIT) level.map[i] = SPACE;
-    }
+  var objectHere = findObjectAtLocation(location);
+  if (typeof paintBrushTileCode === "number") {
+    if (objectHere == null && level.map[location] === paintBrushTileCode) return;
+  } else if (typeof paintBrushTileCode === "string") {
+    if (objectHere != null && objectHere.type === paintBrushTileCode) return;
   }
-  // TODO: push unedit frame
+  if (objectHere != null) removeObject(objectHere);
+  if (typeof paintBrushTileCode === "number") {
+    level.map[location] = paintBrushTileCode;
+    if (paintBrushTileCode === EXIT) {
+      // delete any other exits
+      for (var i = 0; i < level.map.length; i++) {
+        if (i === location) continue;
+        if (level.map[i] === EXIT) level.map[i] = SPACE;
+      }
+    }
+  } else if (typeof paintBrushTileCode === "string") {
+    var newObject = {
+      "type": "fruit",
+    };
+    switch (paintBrushTileCode) {
+      case "fruit":
+        newObject.locations = [location];
+        break;
+      default: throw asdf;
+    }
+    level.objects.push(newObject);
+  }
   render();
 }
 
