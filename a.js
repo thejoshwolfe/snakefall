@@ -275,22 +275,31 @@ paintButtonIdAndTileCodes.forEach(function(pair) {
     setPaintBrushTileCode(tileCode);
   });
 });
-var dragging = false;
+var lastDraggingLocation = null;
 canvas.addEventListener("mousedown", function(event) {
   if (event.altKey) return;
   if (!persistentState.showEditor || paintBrushTileCode == null) return;
   event.preventDefault();
-  dragging = true;
-  paintAtEventLocation(event);
+  lastDraggingLocation = getLocationFromEvent(event);
+  paintAtLocation(lastDraggingLocation);
 });
 document.addEventListener("mouseup", function(event) {
-  dragging = false;
+  lastDraggingLocation = null;
   paintBrushObject = null;
   pushUneditFrame();
 });
 canvas.addEventListener("mousemove", function(event) {
-  if (dragging) paintAtEventLocation(event);
+  if (lastDraggingLocation == null) return;
+  var location = getLocationFromEvent(event);
+  var path = getNaiveOrthogonalPath(lastDraggingLocation, location);
+  path.forEach(paintAtLocation);
+  lastDraggingLocation = location;
 });
+function getLocationFromEvent(event) {
+  var r = Math.floor(eventToMouseY(event, canvas) / tileSize);
+  var c = Math.floor(eventToMouseX(event, canvas) / tileSize);
+  return getLocation(level, r, c);
+}
 function eventToMouseX(event, canvas) { return event.clientX - canvas.getBoundingClientRect().left; }
 function eventToMouseY(event, canvas) { return event.clientY - canvas.getBoundingClientRect().top; }
 function setPaintBrushTileCode(tileCode) {
@@ -318,10 +327,7 @@ function paintBrushTileCodeChanged() {
     document.getElementById(id).style.background = backgroundStyle;
   });
 }
-function paintAtEventLocation(event) {
-  var r = Math.floor(eventToMouseY(event, canvas) / tileSize);
-  var c = Math.floor(eventToMouseX(event, canvas) / tileSize);
-  var location = getLocation(level, r, c);
+function paintAtLocation(location) {
   var objectHere = findObjectAtLocation(location);
   if (typeof paintBrushTileCode === "number") {
     if (objectHere == null && level.map[location] === paintBrushTileCode) return;
@@ -825,16 +831,6 @@ function render() {
   }
 }
 
-function getDirectionFromDifference(toRowcol, fromRowcol) {
-  var dr = toRowcol.r - fromRowcol.r;
-  var dc = toRowcol.c - fromRowcol.c;
-  if      (dr ===  0 && dc ===  1) return ">";
-  else if (dr ===  0 && dc === -1) return "<";
-  else if (dr ===  1 && dc ===  0) return "v";
-  else if (dr === -1 && dc ===  0) return "^";
-  else throw asdf;
-}
-
 function stringifyLevel(level) {
   // we could just JSON.stringify, but that's kinda ugly
   var output = '';
@@ -870,6 +866,32 @@ function stringifyLevel(level) {
   if (!deepEquals(level, shouldBeTheSame)) throw asdf; // serialization is broken
 
   return output;
+}
+
+function getNaiveOrthogonalPath(a, b) {
+  // does not include a, but does include b.
+  var rowcolA = getRowcol(level, a);
+  var rowcolB = getRowcol(level, b);
+  var path = [];
+  if (rowcolA.r < rowcolB.r) {
+    for (var r = rowcolA.r; r < rowcolB.r; r++) {
+      path.push(getLocation(level, r + 1, rowcolA.c));
+    }
+  } else {
+    for (var r = rowcolA.r; r > rowcolB.r; r--) {
+      path.push(getLocation(level, r - 1, rowcolA.c));
+    }
+  }
+  if (rowcolA.c < rowcolB.c) {
+    for (var c = rowcolA.c; c < rowcolB.c; c++) {
+      path.push(getLocation(level, rowcolB.r, c + 1));
+    }
+  } else {
+    for (var c = rowcolA.c; c > rowcolB.c; c--) {
+      path.push(getLocation(level, rowcolB.r, c - 1));
+    }
+  }
+  return path;
 }
 
 loadPersistentState();
