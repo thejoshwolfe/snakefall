@@ -337,7 +337,18 @@ function paintAtLocation(location) {
         // all fruit is the same
         return;
       } else if (paintBrushTileCode === "snake") {
-        if (objectHere.snakeColor === paintBrushSnakeColorIndex) return;
+        // only ignore this paint request if we're already clicking our own head
+        if (objectHere.snakeColor === paintBrushSnakeColorIndex) {
+          if (objectHere.locations[0] === location) return; // that's the head
+          // we might be self-intersecting
+          var selfIntersectionIndex = objectHere.locations.indexOf(location);
+          if (selfIntersectionIndex !== -1) {
+            // truncate from here back
+            objectHere.locations.splice(selfIntersectionIndex);
+            // ok, this object is cool.
+            objectHere = null;
+          }
+        }
       }
     }
   }
@@ -379,7 +390,6 @@ function paintAtLocation(location) {
           level.objects.push(paintBrushObject);
         } else {
           // extend le snake
-          if (paintBrushObject.locations[0] === location) return;
           paintBrushObject.locations.unshift(location);
         }
         break;
