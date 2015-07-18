@@ -218,6 +218,12 @@ document.addEventListener("keydown", function(event) {
     case "D".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode("snake"); break; }
       return;
+    case "G".charCodeAt(0):
+      if (modifierMask === 0) { toggleGravity(); break; }
+      return;
+    case "C".charCodeAt(0):
+      if (modifierMask === 0) { toggleCollision(); break; }
+      return;
     case 32: // spacebar
     case 9:  // tab
       if (modifierMask === 0) {
@@ -275,6 +281,30 @@ paintButtonIdAndTileCodes.forEach(function(pair) {
     setPaintBrushTileCode(tileCode);
   });
 });
+document.getElementById("cheatGravityButton").addEventListener("click", function() {
+  toggleGravity();
+});
+document.getElementById("cheatCollisionButton").addEventListener("click", function() {
+  toggleCollision();
+});
+function toggleGravity() {
+  isGravityEnabled = !isGravityEnabled;
+  isCollisionEnabled = true;
+  refreshCheatButtonText();
+}
+function toggleCollision() {
+  isCollisionEnabled = !isCollisionEnabled;
+  isGravityEnabled = false;
+  refreshCheatButtonText();
+}
+function refreshCheatButtonText() {
+  document.getElementById("cheatGravityButton").value = isGravityEnabled ? "Gravity: ON" : "Gravity: OFF";
+  document.getElementById("cheatGravityButton").style.background = isGravityEnabled ? "" : "#f88";
+
+  document.getElementById("cheatCollisionButton").value = isCollisionEnabled ? "Collision: ON" : "Collision: OFF";
+  document.getElementById("cheatCollisionButton").style.background = isCollisionEnabled ? "" : "#f88";
+}
+
 var lastDraggingLocation = null;
 canvas.addEventListener("mousedown", function(event) {
   if (event.altKey) return;
@@ -427,6 +457,14 @@ function loadPersistentState() {
   }
   showEditorChanged();
 }
+var isGravityEnabled = true;
+function isGravity() {
+  return isGravityEnabled && persistentState.showEditor;
+}
+var isCollisionEnabled = true;
+function isCollision() {
+  return isCollisionEnabled && persistentState.showEditor;
+}
 function showEditorChanged() {
   document.getElementById("showHideEditor").value = (persistentState.showEditor ? "Hide" : "Show") + " Editor Stuff";
   ["editorDiv", "editorPane"].forEach(function(id) {
@@ -447,18 +485,20 @@ function move(dr, dc) {
   var ate = false;
   var pushedObjects = [];
 
-  var newTile = level.map[newLocation];
-  if (!isTileCodeAir(newTile)) return;
-  var otherObject = findObjectAtLocation(newLocation);
-  if (otherObject != null) {
-    if (otherObject === activeSnake) return; // can't push yourself
-    if (otherObject.type === "fruit") {
-      // eat
-      removeObject(otherObject);
-      ate = true;
-    } else {
-      // push objects
-      if (!pushOrFallOrSomething(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
+  if (isCollision()) {
+    var newTile = level.map[newLocation];
+    if (!isTileCodeAir(newTile)) return;
+    var otherObject = findObjectAtLocation(newLocation);
+    if (otherObject != null) {
+      if (otherObject === activeSnake) return; // can't push yourself
+      if (otherObject.type === "fruit") {
+        // eat
+        removeObject(otherObject);
+        ate = true;
+      } else {
+        // push objects
+        if (!pushOrFallOrSomething(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
+      }
     }
   }
 
@@ -471,7 +511,7 @@ function move(dr, dc) {
   moveObjects(pushedObjects, dr, dc);
 
   // gravity loop
-  while (true) {
+  while (isGravity()) {
     var didAnything = false;
 
     // check for exit
