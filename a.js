@@ -200,6 +200,10 @@ document.addEventListener("keydown", function(event) {
     case "R".charCodeAt(0):
       if (modifierMask === 0) { reset(); break; }
       return;
+
+    case 220: // backslash
+      if (modifierMask === 0) { toggleShowEditor(); break; }
+      return;
     case "E".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode(SPACE); break; }
       return;
@@ -244,10 +248,13 @@ document.addEventListener("keydown", function(event) {
   render();
 });
 document.getElementById("showHideEditor").addEventListener("click", function() {
+  toggleShowEditor();
+});
+function toggleShowEditor() {
   persistentState.showEditor = !persistentState.showEditor;
   savePersistentState();
   showEditorChanged();
-});
+}
 document.getElementById("serializationTextarea").addEventListener("keydown", function(event) {
   // let things work normally
   event.stopPropagation();
