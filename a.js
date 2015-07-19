@@ -466,11 +466,11 @@ function loadPersistentState() {
 }
 var isGravityEnabled = true;
 function isGravity() {
-  return isGravityEnabled && persistentState.showEditor;
+  return isGravityEnabled || !persistentState.showEditor;
 }
 var isCollisionEnabled = true;
 function isCollision() {
-  return isCollisionEnabled && persistentState.showEditor;
+  return isCollisionEnabled || !persistentState.showEditor;
 }
 function showEditorChanged() {
   document.getElementById("showHideEditor").value = (persistentState.showEditor ? "Hide" : "Show") + " Editor Stuff";
