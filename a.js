@@ -33,17 +33,33 @@ var level1 = {
   "objects": [
     {
       "type": "snake",
-      "snakeColor": 0,
+      "color": 0,
       "dead": false,
-      "locations": [217,218,219,244]
+      "locations": [217,218,219,220]
     },
     {
       "type": "block",
+      "color": 0,
       "locations": [243,343]
     },
     {
+      "type": "block",
+      "color": 1,
+      "locations": [244,344]
+    },
+    {
+      "type": "block",
+      "color": 2,
+      "locations": [245,345]
+    },
+    {
+      "type": "block",
+      "color": 3,
+      "locations": [246,346]
+    },
+    {
       "type": "snake",
-      "snakeColor": 1,
+      "color": 1,
       "dead": false,
       "locations": [292,293,294]
     },
@@ -53,7 +69,7 @@ var level1 = {
     },
     {
       "type": "snake",
-      "snakeColor": 2,
+      "color": 2,
       "dead": false,
       "locations": [318,319,320]
     }
@@ -98,7 +114,7 @@ function validateLevel(level) {
         // it's all good
         break;
       case "snake":
-        if (snakeColors[object.snakeColor] == null) throw new Error("invalid snakeColor: " + JSON.stringify(object.snakeColor));
+        if (snakeColors[object.color] == null) throw new Error("invalid color: " + JSON.stringify(object.color));
         if (typeof object.dead !== "boolean") throw new Error("invalid dead: " + JSON.stringify(object.dead));
         break;
       default: throw new Error("invalid object type: " + JSON.stringify(object.type));
@@ -234,8 +250,8 @@ document.addEventListener("keydown", function(event) {
         if (isAlive()) {
           var snakes = getSnakes();
           for (var i = 0; i < snakes.length; i++) {
-            if (snakes[i].snakeColor !== activeSnakeColor) continue;
-            activeSnakeColor = snakes[(i + 1) % snakes.length].snakeColor;
+            if (snakes[i].color !== activeSnakeColor) continue;
+            activeSnakeColor = snakes[(i + 1) % snakes.length].color;
             break;
           }
         }
@@ -375,7 +391,7 @@ function paintAtLocation(location) {
         return;
       } else if (paintBrushTileCode === "snake") {
         // only ignore this paint request if we're already clicking our own head
-        if (objectHere.snakeColor === paintBrushSnakeColorIndex) {
+        if (objectHere.color === paintBrushSnakeColorIndex) {
           if (objectHere.locations[0] === location) return; // that's the head
           // we might be self-intersecting
           var selfIntersectionIndex = objectHere.locations.indexOf(location);
@@ -420,7 +436,7 @@ function paintAtLocation(location) {
         if (paintBrushObject == null) {
           paintBrushObject = {
             type: paintBrushTileCode,
-            snakeColor: paintBrushSnakeColorIndex,
+            color: paintBrushSnakeColorIndex,
             dead: false,
             locations: [location],
           };
@@ -647,7 +663,7 @@ function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects, dyin
 function activateAnySnakePlease() {
   var snakes = getSnakes();
   if (snakes.length === 0) return; // nope.avi
-  activeSnakeColor = snakes[0].snakeColor;
+  activeSnakeColor = snakes[0].color;
 }
 
 function moveObjects(objects, dr, dc) {
@@ -668,7 +684,7 @@ function addIfNotPresent(array, element) {
 }
 function removeObject(object) {
   removeFromArray(level.objects, object);
-  if (object.type === "snake" && object.snakeColor === activeSnakeColor) {
+  if (object.type === "snake" && object.color === activeSnakeColor) {
     activateAnySnakePlease();
   }
 }
@@ -680,14 +696,14 @@ function removeFromArray(array, element) {
 function findActiveSnake() {
   var snakes = getSnakes();
   for (var i = 0; i < snakes.length; i++) {
-    if (snakes[i].snakeColor === activeSnakeColor) return snakes[i];
+    if (snakes[i].color === activeSnakeColor) return snakes[i];
   }
   throw asdf;
 }
-function findSnakeOfColor(snakeColor) {
+function findSnakeOfColor(color) {
   var snakes = getSnakes();
   for (var i = 0; i < snakes.length; i++) {
-    if (snakes[i].snakeColor === snakeColor) return snakes[i];
+    if (snakes[i].color === color) return snakes[i];
   }
   return null;
 }
@@ -728,6 +744,12 @@ var snakeColors = [
   "#00f",
   "#ff0",
 ];
+var blockColors = [
+  {foreground: "#800", background: "#400"},
+  {foreground: "#820", background: "#410"},
+  {foreground: "#802", background: "#401"},
+  {foreground: "#822", background: "#411"},
+];
 
 var activeSnakeColor = null;
 
@@ -742,12 +764,13 @@ function render() {
   // begin by rendering the background connections for blocks
   level.objects.forEach(function(object) {
     if (object.type !== "block") return;
+    var color = blockColors[object.color].background;
     for (var i = 0; i < object.locations.length - 1; i++) {
       var rowcol1 = getRowcol(level, object.locations[i]);
       var rowcol2 = getRowcol(level, object.locations[i + 1]);
       var cornerRowcol = {r:rowcol1.r, c:rowcol2.c};
-      drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c);
-      drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c);
+      drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c, color);
+      drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c, color);
     }
   });
 
@@ -779,13 +802,13 @@ function render() {
     switch (object.type) {
       case "snake":
         var lastRowcol = null
-        var color = snakeColors[object.snakeColor];
+        var color = snakeColors[object.color];
         object.locations.forEach(function(location) {
           var rowcol = getRowcol(level, location);
           if (object.dead) rowcol.r += 0.5;
           if (lastRowcol == null) {
             // head
-            if (object.snakeColor === activeSnakeColor) {
+            if (object.color === activeSnakeColor) {
               drawRect(rowcol.r, rowcol.c, "#888");
             }
             drawDiamond(rowcol.r, rowcol.c, color);
@@ -798,9 +821,10 @@ function render() {
         });
         break;
       case "block":
+        var color = blockColors[object.color].foreground;
         object.locations.forEach(function(location) {
           var rowcol = getRowcol(level, location);
-          drawRect(rowcol.r, rowcol.c, "#800");
+          drawRect(rowcol.r, rowcol.c, color);
         });
         break;
       case "fruit":
@@ -838,7 +862,7 @@ function render() {
     context.lineTo(x + tileSize, y + tileSize);
     context.fill();
   }
-  function drawConnector(r1, c1, r2, c2) {
+  function drawConnector(r1, c1, r2, c2, color) {
     // either r1 and r2 or c1 and c2 must be equal
     if (r1 > r2 || c1 > c2) {
       var rTmp = r1;
@@ -852,7 +876,7 @@ function render() {
     var yLo = (r1 + 0.4) * tileSize;
     var xHi = (c2 + 0.6) * tileSize;
     var yHi = (r2 + 0.6) * tileSize;
-    context.fillStyle = "#400";
+    context.fillStyle = color;
     context.fillRect(xLo, yLo, xHi - xLo, yHi - yLo);
   }
   function drawQuarterPie(r, c, radiusFactor, fillStyle, quadrant) {
@@ -889,7 +913,7 @@ function render() {
 }
 
 function stringifyLevel(level) {
-  // we could just JSON.stringify, but that's kinda ugly
+  // we could just JSON.stringify, but that's kinda ugly and non-deterministic.
   var output = '';
   output +=     '{\n';
   output +=     '  "height": ' + level.height + ',\n';
@@ -906,7 +930,7 @@ function stringifyLevel(level) {
     var object = level.objects[i];
     output +=   '    {\n';
     output +=   '      "type": ' + JSON.stringify(object.type) + ',\n';
-    ["snakeColor", "dead"].forEach(function(key) {
+    ["color", "dead"].forEach(function(key) {
       if (!(key in object)) return;
       output += '      ' + JSON.stringify(key) + ': ' + JSON.stringify(object[key]) + ',\n';
     });
