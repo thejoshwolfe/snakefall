@@ -14,7 +14,7 @@ A [Snakebird](http://snakebird.noumenongames.com/) clone.
   * Size-1 snakes.
 * Editor:
   * Edit the game while it's running.
-  * Place and edit everything the game engine supports except for blocks.
+  * Place and edit everything the game engine supports.
   * Cheatcodes to turn off gravity and collision detection (noclip) while editing.
   * Level data is json text that you can copy out and paste in. No server-side saving (because there's no server at all).
 
@@ -27,7 +27,6 @@ Important:
   * Remove hard ceiling.
   * Resize the world.
 * Editor:
-  * Create blocks.
   * Select/Cut/Copy/Paste.
   * Detect and show errors: collision/gravity violations, no snakes or no exit, etc.
   * Figure out how unmove and unedit should interact.

@@ -238,6 +238,9 @@ document.addEventListener("keydown", function(event) {
     case "D".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode("snake"); break; }
       return;
+    case "B".charCodeAt(0):
+      if (modifierMask === 0) { setPaintBrushTileCode("block"); break; }
+      return;
     case "G".charCodeAt(0):
       if (modifierMask === 0) { toggleGravity(); break; }
       return;
@@ -288,6 +291,7 @@ document.getElementById("submitSerializationButton").addEventListener("click", f
 
 var paintBrushTileCode = null;
 var paintBrushSnakeColorIndex = 0;
+var paintBrushBlockColorIndex = 0;
 var paintBrushObject = null;
 var paintButtonIdAndTileCodes = [
   ["paintSpaceButton", SPACE],
@@ -296,6 +300,7 @@ var paintButtonIdAndTileCodes = [
   ["paintExitButton", EXIT],
   ["paintFruitButton", "fruit"],
   ["paintSnakeButton", "snake"],
+  ["paintBlockButton", "block"],
 ];
 paintButtonIdAndTileCodes.forEach(function(pair) {
   var id = pair[0];
@@ -361,6 +366,11 @@ function setPaintBrushTileCode(tileCode) {
       // next snake color
       paintBrushSnakeColorIndex = (paintBrushSnakeColorIndex + 1) % snakeColors.length;
     }
+  } else if (tileCode === "block") {
+    if (paintBrushTileCode === "block") {
+      // next block color
+      paintBrushBlockColorIndex = (paintBrushBlockColorIndex + 1) % blockColors.length;
+    }
   }
   paintBrushTileCode = tileCode;
   paintBrushTileCodeChanged();
@@ -373,6 +383,8 @@ function paintBrushTileCodeChanged() {
     if (tileCode === paintBrushTileCode) {
       if (tileCode === "snake") {
         backgroundStyle = snakeColors[paintBrushSnakeColorIndex];
+      } else if (tileCode === "block") {
+        backgroundStyle = blockColors[paintBrushBlockColorIndex].foreground;
       } else {
         backgroundStyle = "#ff0";
       }
@@ -381,6 +393,7 @@ function paintBrushTileCodeChanged() {
   });
 }
 function paintAtLocation(location) {
+  // what have we got here?
   var objectHere = findObjectAtLocation(location);
   if (typeof paintBrushTileCode === "number") {
     if (objectHere == null && level.map[location] === paintBrushTileCode) return;
@@ -391,7 +404,7 @@ function paintAtLocation(location) {
         return;
       } else if (paintBrushTileCode === "snake") {
         // only ignore this paint request if we're already clicking our own head
-        if (objectHere.color === paintBrushSnakeColorIndex) {
+        if (objectHere.type === "snake" && objectHere.color === paintBrushSnakeColorIndex) {
           if (objectHere.locations[0] === location) return; // that's the head
           // we might be self-intersecting
           var selfIntersectionIndex = objectHere.locations.indexOf(location);
@@ -402,10 +415,17 @@ function paintAtLocation(location) {
             objectHere = null;
           }
         }
+      } else if (paintBrushTileCode === "block") {
+        if (objectHere.type === "block" && objectHere.color == paintBrushBlockColorIndex) {
+          // there's special code for reclicking a block you're editing.
+          // don't blindly delete the object
+          objectHere = null;
+        }
       }
     }
   }
   if (objectHere != null) removeObject(objectHere);
+
   if (paintBrushTileCode === "snake" && paintBrushObject == null) {
     // new snake. make sure any old snake of the same color is gone.
     var oldSnake = findSnakeOfColor(paintBrushSnakeColorIndex);
@@ -444,6 +464,26 @@ function paintAtLocation(location) {
         } else {
           // extend le snake
           paintBrushObject.locations.unshift(location);
+        }
+        break;
+      case "block":
+        var thisBlock = findBlockOfColor(paintBrushBlockColorIndex);
+        if (thisBlock == null) {
+          thisBlock = {
+            type: paintBrushTileCode,
+            color: paintBrushBlockColorIndex,
+            locations: [location],
+          }
+          level.objects.push(thisBlock);
+        } else {
+          var existingIndex = thisBlock.locations.indexOf(location);
+          if (existingIndex !== -1) {
+            // reclicking part of this object means to delete just part of it.
+            thisBlock.locations.splice(existingIndex, 1);
+          } else {
+            // add a tile to the block
+            thisBlock.locations.push(location);
+          }
         }
         break;
       default: throw asdf;
@@ -699,6 +739,13 @@ function findActiveSnake() {
     if (snakes[i].color === activeSnakeColor) return snakes[i];
   }
   throw asdf;
+}
+function findBlockOfColor(color) {
+  for (var i = 0; i < level.objects.length; i++) {
+    var object = level.objects[i];
+    if (object.type === "block" && object.color === color) return object;
+  }
+  return null;
 }
 function findSnakeOfColor(color) {
   var snakes = getSnakes();
