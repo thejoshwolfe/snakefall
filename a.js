@@ -391,6 +391,7 @@ function paintBrushTileCodeChanged() {
     }
     document.getElementById(id).style.background = backgroundStyle;
   });
+  render();
 }
 function paintAtLocation(location) {
   // what have we got here?
@@ -479,7 +480,11 @@ function paintAtLocation(location) {
           var existingIndex = thisBlock.locations.indexOf(location);
           if (existingIndex !== -1) {
             // reclicking part of this object means to delete just part of it.
-            thisBlock.locations.splice(existingIndex, 1);
+            if (thisBlock.locations.length === 1) {
+              removeObject(thisBlock);
+            } else {
+              thisBlock.locations.splice(existingIndex, 1);
+            }
           } else {
             // add a tile to the block
             thisBlock.locations.push(location);
@@ -808,8 +813,27 @@ function render() {
   context.fillStyle = "#000";
   context.fillRect(0, 0, canvas.width, canvas.height);
 
+  // normal render
+  renderLevel(context, level);
+  if (persistentState.showEditor && paintBrushTileCode === "block") {
+    var activeBlock = findBlockOfColor(paintBrushBlockColorIndex);
+    if (activeBlock != null) {
+      // fade everything else away
+      context.fillStyle = "rgba(0, 0, 0, 0.8)";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      // and render just this object in focus
+      renderLevel(context, level, [activeBlock]);
+    }
+  }
+
+  // serialize
+  document.getElementById("serializationTextarea").value = stringifyLevel(level);
+}
+function renderLevel(context, level, onlyTheseObjects) {
+  var objects = level.objects;
+  if (onlyTheseObjects != null) objects = onlyTheseObjects;
   // begin by rendering the background connections for blocks
-  level.objects.forEach(function(object) {
+  objects.forEach(function(object) {
     if (object.type !== "block") return;
     var color = blockColors[object.color].background;
     for (var i = 0; i < object.locations.length - 1; i++) {
@@ -821,31 +845,35 @@ function render() {
     }
   });
 
-  for (var r = 0; r < level.height; r++) {
-    for (var c = 0; c < level.width; c++) {
-      var tileCode = level.map[getLocation(level, r, c)];
-      switch (tileCode) {
-        case SPACE:
-          break;
-        case WALL:
-          drawRect(r, c, "#fff");
-          break;
-        case SPIKE:
-          drawSpikes(r, c);
-          break;
-        case EXIT:
-          var radiusFactor = countFruit() === 0 ? 1.2 : 0.7;
-          drawQuarterPie(r, c, radiusFactor, "#f00", 0);
-          drawQuarterPie(r, c, radiusFactor, "#0f0", 1);
-          drawQuarterPie(r, c, radiusFactor, "#00f", 2);
-          drawQuarterPie(r, c, radiusFactor, "#ff0", 3);
-          break;
-        default: throw asdf;
+  // terrain
+  if (onlyTheseObjects == null) {
+    for (var r = 0; r < level.height; r++) {
+      for (var c = 0; c < level.width; c++) {
+        var tileCode = level.map[getLocation(level, r, c)];
+        switch (tileCode) {
+          case SPACE:
+            break;
+          case WALL:
+            drawRect(r, c, "#fff");
+            break;
+          case SPIKE:
+            drawSpikes(r, c);
+            break;
+          case EXIT:
+            var radiusFactor = countFruit() === 0 ? 1.2 : 0.7;
+            drawQuarterPie(r, c, radiusFactor, "#f00", 0);
+            drawQuarterPie(r, c, radiusFactor, "#0f0", 1);
+            drawQuarterPie(r, c, radiusFactor, "#00f", 2);
+            drawQuarterPie(r, c, radiusFactor, "#ff0", 3);
+            break;
+          default: throw asdf;
+        }
       }
     }
   }
 
-  level.objects.forEach(function(object) {
+  // objects
+  objects.forEach(function(object) {
     switch (object.type) {
       case "snake":
         var lastRowcol = null
@@ -893,9 +921,6 @@ function render() {
     context.font = "100px Arial";
     context.fillText("You Dead!", 0, canvas.height / 2);
   }
-
-  // serialize
-  document.getElementById("serializationTextarea").value = stringifyLevel(level);
 
   function drawSpikes(r, c) {
     var x = c * tileSize;
