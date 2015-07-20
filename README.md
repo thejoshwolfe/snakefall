@@ -25,9 +25,9 @@ Important:
 * Game Engine:
   * Enable Snakebird levels 30-38
   * Remove hard ceiling.
-  * Resize the world.
 * Editor:
   * Select/Cut/Copy/Paste.
+  * Resize the world.
   * Detect and show errors: collision/gravity violations, no snakes or no exit, etc.
   * Figure out how unmove and unedit should interact.
   * Stabilize level format: version numbers, upconversions.
