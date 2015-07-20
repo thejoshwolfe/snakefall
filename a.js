@@ -261,6 +261,12 @@ document.addEventListener("keydown", function(event) {
         break;
       }
       return;
+    case 27: // escape
+      if (modifierMask === 0) {
+        setPaintBrushTileCode(null);
+        break;
+      }
+      return;
     default: return;
   }
   event.preventDefault();
@@ -334,6 +340,7 @@ function refreshCheatButtonText() {
 }
 
 var lastDraggingLocation = null;
+var hoverLocation = null;
 canvas.addEventListener("mousedown", function(event) {
   if (event.altKey) return;
   if (!persistentState.showEditor || paintBrushTileCode == null) return;
@@ -347,11 +354,21 @@ document.addEventListener("mouseup", function(event) {
   pushUneditFrame();
 });
 canvas.addEventListener("mousemove", function(event) {
-  if (lastDraggingLocation == null) return;
+  if (!persistentState.showEditor) return;
   var location = getLocationFromEvent(event);
-  var path = getNaiveOrthogonalPath(lastDraggingLocation, location);
-  path.forEach(paintAtLocation);
-  lastDraggingLocation = location;
+  if (lastDraggingLocation != null) {
+    // Dragging Force - Through the Fruit and Flames
+    var path = getNaiveOrthogonalPath(lastDraggingLocation, location);
+    path.forEach(paintAtLocation);
+    lastDraggingLocation = location;
+    hoverLocation = null;
+  } else {
+    // hovering
+    if (hoverLocation !== location) {
+      hoverLocation = location;
+      render();
+    }
+  }
 });
 function getLocationFromEvent(event) {
   var r = Math.floor(eventToMouseY(event, canvas) / tileSize);
@@ -392,6 +409,28 @@ function paintBrushTileCodeChanged() {
     document.getElementById(id).style.background = backgroundStyle;
   });
   render();
+}
+
+function newFruit(location) {
+  return {
+    type: "fruit",
+    locations: [location],
+  };
+}
+function newSnake(color, location) {
+  return {
+    type: "snake",
+    color: color,
+    dead: false,
+    locations: [location],
+  };
+}
+function newBlock(color, location) {
+  return {
+    type: "block",
+    color: color,
+    locations: [location],
+  };
 }
 function paintAtLocation(location) {
   // what have we got here?
@@ -447,21 +486,13 @@ function paintAtLocation(location) {
     level.map[location] = SPACE;
     switch (paintBrushTileCode) {
       case "fruit":
-        var newObject = {
-          type: paintBrushTileCode,
-          locations: [location],
-        };
+        var newObject = newFruit(location);
         level.objects.push(newObject);
         break;
       case "snake":
         if (paintBrushObject == null) {
           var thereWereNoSnakes = countSnakes() === 0;
-          paintBrushObject = {
-            type: paintBrushTileCode,
-            color: paintBrushSnakeColorIndex,
-            dead: false,
-            locations: [location],
-          };
+          paintBrushObject = newSnake(paintBrushSnakeColorIndex, location);
           level.objects.push(paintBrushObject);
           if (thereWereNoSnakes) activateAnySnakePlease();
         } else {
@@ -472,11 +503,7 @@ function paintAtLocation(location) {
       case "block":
         var thisBlock = findBlockOfColor(paintBrushBlockColorIndex);
         if (thisBlock == null) {
-          thisBlock = {
-            type: paintBrushTileCode,
-            color: paintBrushBlockColorIndex,
-            locations: [location],
-          }
+          thisBlock = newBlock(paintBrushBlockColorIndex, location);
           level.objects.push(thisBlock);
         } else {
           var existingIndex = thisBlock.locations.indexOf(location);
@@ -852,30 +879,73 @@ function renderLevel(context, level, onlyTheseObjects) {
     for (var r = 0; r < level.height; r++) {
       for (var c = 0; c < level.width; c++) {
         var tileCode = level.map[getLocation(level, r, c)];
-        switch (tileCode) {
-          case SPACE:
-            break;
-          case WALL:
-            drawRect(r, c, "#fff");
-            break;
-          case SPIKE:
-            drawSpikes(r, c);
-            break;
-          case EXIT:
-            var radiusFactor = countFruit() === 0 ? 1.2 : 0.7;
-            drawQuarterPie(r, c, radiusFactor, "#f00", 0);
-            drawQuarterPie(r, c, radiusFactor, "#0f0", 1);
-            drawQuarterPie(r, c, radiusFactor, "#00f", 2);
-            drawQuarterPie(r, c, radiusFactor, "#ff0", 3);
-            break;
-          default: throw asdf;
-        }
+        drawTile(tileCode, r, c);
       }
     }
   }
 
   // objects
-  objects.forEach(function(object) {
+  objects.forEach(drawObject);
+
+  // banners
+  if (countSnakes() === 0) {
+    context.fillStyle = "#ff0";
+    context.font = "100px Arial";
+    context.fillText("You Win!", 0, canvas.height / 2);
+  }
+  if (isDead()) {
+    context.fillStyle = "#f00";
+    context.font = "100px Arial";
+    context.fillText("You Dead!", 0, canvas.height / 2);
+  }
+
+  // editor hover
+  if (persistentState.showEditor && hoverLocation != null && paintBrushTileCode != null) {
+    var rowcol = getRowcol(level, hoverLocation);
+    var objectHere = findObjectAtLocation(hoverLocation);
+    context.save();
+    context.globalAlpha = 0.2;
+    if (typeof paintBrushTileCode === "number") {
+      if (level.map[hoverLocation] !== paintBrushTileCode) {
+        drawTile(paintBrushTileCode, rowcol.r, rowcol.c);
+      }
+    } else if (paintBrushTileCode === "fruit") {
+      if (!(objectHere != null && objectHere.type === "fruit")) {
+        drawObject(newFruit([hoverLocation]));
+      }
+    } else if (paintBrushTileCode === "snake") {
+      if (!(objectHere != null && objectHere.type === "snake" && objectHere.color === paintBrushSnakeColorIndex)) {
+        drawObject(newSnake(paintBrushSnakeColorIndex, hoverLocation));
+      }
+    } else if (paintBrushTileCode === "block") {
+      if (!(objectHere != null && objectHere.type === "block" && objectHere.color === paintBrushBlockColorIndex)) {
+        drawObject(newBlock(paintBrushSnakeColorIndex, hoverLocation));
+      }
+    } else throw asdf;
+    context.restore();
+  }
+
+  function drawTile(tileCode, r, c) {
+    switch (tileCode) {
+      case SPACE:
+        break;
+      case WALL:
+        drawRect(r, c, "#fff");
+        break;
+      case SPIKE:
+        drawSpikes(r, c);
+        break;
+      case EXIT:
+        var radiusFactor = countFruit() === 0 ? 1.2 : 0.7;
+        drawQuarterPie(r, c, radiusFactor, "#f00", 0);
+        drawQuarterPie(r, c, radiusFactor, "#0f0", 1);
+        drawQuarterPie(r, c, radiusFactor, "#00f", 2);
+        drawQuarterPie(r, c, radiusFactor, "#ff0", 3);
+        break;
+      default: throw asdf;
+    }
+  }
+  function drawObject(object) {
     switch (object.type) {
       case "snake":
         var lastRowcol = null
@@ -910,20 +980,7 @@ function renderLevel(context, level, onlyTheseObjects) {
         break;
       default: throw asdf;
     }
-  });
-
-  if (countSnakes() === 0) {
-    // you win banner
-    context.fillStyle = "#ff0";
-    context.font = "100px Arial";
-    context.fillText("You Win!", 0, canvas.height / 2);
   }
-  if (isDead()) {
-    context.fillStyle = "#f00";
-    context.font = "100px Arial";
-    context.fillText("You Dead!", 0, canvas.height / 2);
-  }
-
   function drawSpikes(r, c) {
     var x = c * tileSize;
     var y = r * tileSize;
