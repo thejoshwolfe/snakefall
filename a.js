@@ -455,6 +455,7 @@ function paintAtLocation(location) {
         break;
       case "snake":
         if (paintBrushObject == null) {
+          var thereWereNoSnakes = countSnakes() === 0;
           paintBrushObject = {
             type: paintBrushTileCode,
             color: paintBrushSnakeColorIndex,
@@ -462,6 +463,7 @@ function paintAtLocation(location) {
             locations: [location],
           };
           level.objects.push(paintBrushObject);
+          if (thereWereNoSnakes) activateAnySnakePlease();
         } else {
           // extend le snake
           paintBrushObject.locations.unshift(location);
