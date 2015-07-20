@@ -222,6 +222,7 @@ document.addEventListener("keydown", function(event) {
       return;
     case "R".charCodeAt(0):
       if (modifierMask === 0) { reset(); break; }
+      else if (modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
       return;
 
     case 220: // backslash
@@ -306,7 +307,10 @@ var paintBrushTileCode = null;
 var paintBrushSnakeColorIndex = 0;
 var paintBrushBlockColorIndex = 0;
 var paintBrushObject = null;
+var selectionStart = null;
+var selectionEnd = null;
 var paintButtonIdAndTileCodes = [
+  ["selectButton", "select"],
   ["paintSpaceButton", SPACE],
   ["paintWallButton",  WALL],
   ["paintSpikeButton", SPIKE],
@@ -352,7 +356,9 @@ canvas.addEventListener("mousedown", function(event) {
   if (event.altKey) return;
   if (!persistentState.showEditor || paintBrushTileCode == null) return;
   event.preventDefault();
-  lastDraggingLocation = getLocationFromEvent(event);
+  var location = getLocationFromEvent(event);
+  lastDraggingLocation = location;
+  if (paintBrushTileCode === "select") selectionStart = location;
   paintAtLocation(lastDraggingLocation);
 });
 document.addEventListener("mouseup", function(event) {
@@ -444,6 +450,9 @@ function paintAtLocation(location) {
   var objectHere = findObjectAtLocation(location);
   if (typeof paintBrushTileCode === "number") {
     if (objectHere == null && level.map[location] === paintBrushTileCode) return;
+  } else if (paintBrushTileCode === "select") {
+    // don't delete things while selecting
+    objectHere = null;
   } else if (typeof paintBrushTileCode === "string") {
     if (objectHere != null && objectHere.type === paintBrushTileCode) {
       if (paintBrushTileCode === "fruit") {
@@ -488,6 +497,8 @@ function paintAtLocation(location) {
         if (level.map[i] === EXIT) level.map[i] = SPACE;
       }
     }
+  } else if (paintBrushTileCode === "select") {
+    selectionEnd = location;
   } else if (typeof paintBrushTileCode === "string") {
     // make sure there's space behind us
     level.map[location] = SPACE;
@@ -851,19 +862,47 @@ function render() {
 
   // normal render
   renderLevel(context, level);
-  if (persistentState.showEditor && paintBrushTileCode === "block") {
-    var activeBlock = findBlockOfColor(paintBrushBlockColorIndex);
-    if (activeBlock != null) {
-      // fade everything else away
-      context.fillStyle = "rgba(0, 0, 0, 0.8)";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      // and render just this object in focus
-      renderLevel(context, level, [activeBlock]);
+
+  if (persistentState.showEditor) {
+    if (paintBrushTileCode === "block") {
+      var activeBlock = findBlockOfColor(paintBrushBlockColorIndex);
+      if (activeBlock != null) {
+        // fade everything else away
+        context.fillStyle = "rgba(0, 0, 0, 0.8)";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        // and render just this object in focus
+        renderLevel(context, level, [activeBlock]);
+      }
+    } else if (paintBrushTileCode === "select") {
+      if (selectionStart != null && selectionEnd != null) {
+        drawLargeRect(selectionStart, selectionEnd, "rgba(128, 128, 128, 0.3)");
+      }
     }
   }
 
   // serialize
   document.getElementById("serializationTextarea").value = stringifyLevel(level);
+
+  function drawLargeRect(location1, location2, fillStyle) {
+    context.fillStyle = fillStyle;
+    var rowcol1 = getRowcol(level, location1);
+    var rowcol2 = getRowcol(level, location2);
+    var r1 = rowcol1.r;
+    var c1 = rowcol1.c;
+    var r2 = rowcol2.r;
+    var c2 = rowcol2.c;
+    if (r2 < r1) {
+      var tmp = r1;
+      r1 = r2;
+      r2 = tmp;
+    }
+    if (c2 < c1) {
+      var tmp = c1;
+      c1 = c2;
+      c2 = tmp;
+    }
+    context.fillRect(c1 * tileSize, r1 * tileSize, (c2 - c1 + 1) * tileSize, (r2 - r1 + 1) * tileSize);
+  }
 }
 function renderLevel(context, level, onlyTheseObjects) {
   var objects = level.objects;
@@ -928,6 +967,8 @@ function renderLevel(context, level, onlyTheseObjects) {
       if (!(objectHere != null && objectHere.type === "block" && objectHere.color === paintBrushBlockColorIndex)) {
         drawObject(newBlock(paintBrushSnakeColorIndex, hoverLocation));
       }
+    } else if (paintBrushTileCode === "select") {
+      void 0; // do nothing
     } else throw asdf;
     context.restore();
   }
