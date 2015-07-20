@@ -31,6 +31,7 @@ Important:
   * Detect and show errors: collision/gravity violations, no snakes or no exit, etc.
   * Figure out how unmove and unedit should interact.
   * Stabilize level format: version numbers, upconversions.
+  * Arbitrarily many snakes and blocks instead of only 4 of each.
 * Solver AI.
 * Level select/loading/sharing:
   * Ability to queue up several levels and play them all in sequence.
