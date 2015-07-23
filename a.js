@@ -228,6 +228,9 @@ document.addEventListener("keydown", function(event) {
     case 220: // backslash
       if (modifierMask === 0) { toggleShowEditor(); break; }
       return;
+    case "A".charCodeAt(0):
+      if (modifierMask === CTRL) { selectAll(); break; }
+      return;
     case "E".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode(SPACE); break; }
       return;
@@ -390,6 +393,13 @@ function getLocationFromEvent(event) {
 }
 function eventToMouseX(event, canvas) { return event.clientX - canvas.getBoundingClientRect().left; }
 function eventToMouseY(event, canvas) { return event.clientY - canvas.getBoundingClientRect().top; }
+
+function selectAll() {
+  selectionStart = 0;
+  selectionEnd = level.map.length - 1;
+  setPaintBrushTileCode("select");
+}
+
 function setPaintBrushTileCode(tileCode) {
   if (paintBrushTileCode === "select" && selectionStart != null && selectionEnd != null) {
     // usually this means to fill in the selection
