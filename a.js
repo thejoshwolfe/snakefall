@@ -391,6 +391,25 @@ function getLocationFromEvent(event) {
 function eventToMouseX(event, canvas) { return event.clientX - canvas.getBoundingClientRect().left; }
 function eventToMouseY(event, canvas) { return event.clientY - canvas.getBoundingClientRect().top; }
 function setPaintBrushTileCode(tileCode) {
+  if (paintBrushTileCode === "select" && selectionStart != null && selectionEnd != null) {
+    // usually this means to fill in the selection
+    if (tileCode == null) {
+      // cancel selection
+      selectionStart = null;
+      selectionEnd = null;
+      return;
+    }
+    if (typeof tileCode === "number" && tileCode !== EXIT) {
+      // fill in the selection
+      fillSelection(tileCode);
+      selectionStart = null;
+      selectionEnd = null;
+      return;
+    }
+    // ok, just select something else then.
+    selectionStart = null;
+    selectionEnd = null;
+  }
   if (tileCode === "snake") {
     if (paintBrushTileCode === "snake") {
       // next snake color
@@ -422,6 +441,43 @@ function paintBrushTileCodeChanged() {
     document.getElementById(id).style.background = backgroundStyle;
   });
   render();
+}
+
+function fillSelection(tileCode) {
+  var locations = getSelectedLocations();
+  var objects = [];
+  locations.forEach(function(location) {
+    level.map[location] = tileCode;
+    var object = findObjectAtLocation(location);
+    if (object != null) addIfNotPresent(objects, object);
+  });
+  objects.forEach(removeObject);
+  pushUneditFrame();
+}
+function getSelectedLocations() {
+  var rowcol1 = getRowcol(level, selectionStart);
+  var rowcol2 = getRowcol(level, selectionEnd);
+  var r1 = rowcol1.r;
+  var c1 = rowcol1.c;
+  var r2 = rowcol2.r;
+  var c2 = rowcol2.c;
+  if (r2 < r1) {
+    var tmp = r1;
+    r1 = r2;
+    r2 = tmp;
+  }
+  if (c2 < c1) {
+    var tmp = c1;
+    c1 = c2;
+    c2 = tmp;
+  }
+  var result = [];
+  for (var r = r1; r <= r2; r++) {
+    for (var c = c1; c <= c2; c++) {
+      result.push(getLocation(level, r, c));
+    }
+  }
+  return result;
 }
 
 function newFruit(location) {
