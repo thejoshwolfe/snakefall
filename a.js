@@ -618,6 +618,7 @@ function paintAtLocation(location) {
       var rowcol = getRowcol(clipboardData.level, sourceLocation);
       var r = hoverRowcol.r + rowcol.r - clipboardOffsetRowcol.r;
       var c = hoverRowcol.c + rowcol.c - clipboardOffsetRowcol.c;
+      if (!isInBounds(level, r, c)) return; // big paste is dangling off the edge of the world
       var destLocation = getLocation(level, r, c);
       var objectHere = findObjectAtLocation(destLocation);
       if (objectHere != null) removeObject(objectHere);
