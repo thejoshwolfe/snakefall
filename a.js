@@ -467,9 +467,15 @@ function cutSelection() {
 function copySelection() {
   var selectedLocations = getSelectedLocations();
   if (selectedLocations.length === 0) return;
+  var selectedObjects = [];
+  selectedLocations.forEach(function(location) {
+    var object = findObjectAtLocation(location);
+    if (object != null) addIfNotPresent(selectedObjects, object);
+  });
   setClipboardData({
     level: JSON.parse(stringifyLevel(level)),
-    selection: selectedLocations,
+    selectedLocations: selectedLocations,
+    selectedObjects: selectedObjects,
   });
 }
 function setClipboardData(data) {
@@ -478,7 +484,7 @@ function setClipboardData(data) {
   var maxR = -Infinity;
   var minC = Infinity;
   var maxC = -Infinity;
-  data.selection.forEach(function(location) {
+  data.selectedLocations.forEach(function(location) {
     var rowcol = getRowcol(data.level, location);
     if (rowcol.r < minR) minR = rowcol.r;
     if (rowcol.r > maxR) maxR = rowcol.r;
@@ -613,16 +619,19 @@ function paintAtLocation(location) {
     selectionEnd = location;
   } else if (paintBrushTileCode === "paste") {
     var hoverRowcol = getRowcol(level, location);
-    clipboardData.selection.forEach(function(sourceLocation) {
-      var tileCode = clipboardData.level.map[sourceLocation];
-      var rowcol = getRowcol(clipboardData.level, sourceLocation);
-      var r = hoverRowcol.r + rowcol.r - clipboardOffsetRowcol.r;
-      var c = hoverRowcol.c + rowcol.c - clipboardOffsetRowcol.c;
-      if (!isInBounds(level, r, c)) return; // big paste is dangling off the edge of the world
-      var destLocation = getLocation(level, r, c);
-      var objectHere = findObjectAtLocation(destLocation);
+    var pastedData = previewPaste(hoverRowcol.r, hoverRowcol.c);
+    pastedData.selectedLocations.forEach(function(location) {
+      var tileCode = pastedData.level.map[location];
+      var objectHere = findObjectAtLocation(location);
       if (objectHere != null) removeObject(objectHere);
-      paintTileAtLocation(destLocation, tileCode);
+      paintTileAtLocation(location, tileCode);
+    });
+    pastedData.selectedObjects.forEach(function(object) {
+      if (object.color != null) {
+        var otherObject = findObjectOfTypeAndColor(object.type, object.color);
+        if (otherObject != null) removeObject(otherObject);
+      }
+      level.objects.push(object);
     });
   } else if (typeof paintBrushTileCode === "string") {
     // make sure there's space behind us
@@ -929,16 +938,15 @@ function findActiveSnake() {
   throw asdf;
 }
 function findBlockOfColor(color) {
-  for (var i = 0; i < level.objects.length; i++) {
-    var object = level.objects[i];
-    if (object.type === "block" && object.color === color) return object;
-  }
-  return null;
+  return findObjectOfTypeAndColor("block", color);
 }
 function findSnakeOfColor(color) {
-  var snakes = getSnakes();
-  for (var i = 0; i < snakes.length; i++) {
-    if (snakes[i].color === color) return snakes[i];
+  return findObjectOfTypeAndColor("snake", color);
+}
+function findObjectOfTypeAndColor(type, color) {
+  for (var i = 0; i < level.objects.length; i++) {
+    var object = level.objects[i];
+    if (object.type === type && object.color === color) return object;
   }
   return null;
 }
@@ -1089,13 +1097,13 @@ function render() {
         void 0; // do nothing
       } else if (paintBrushTileCode === "paste") {
         // show what will be pasted if you click
-        clipboardData.selection.forEach(function(location) {
-          var tileCode = clipboardData.level.map[location];
-          var rowcol = getRowcol(clipboardData.level, location);
-          var r = hoverRowcol.r + rowcol.r - clipboardOffsetRowcol.r;
-          var c = hoverRowcol.c + rowcol.c - clipboardOffsetRowcol.c;
-          drawTile(tileCode, r, c);
+        var pastedData = previewPaste(hoverRowcol.r, hoverRowcol.c);
+        pastedData.selectedLocations.forEach(function(location) {
+          var tileCode = pastedData.level.map[location];
+          var rowcol = getRowcol(level, location);
+          drawTile(tileCode, rowcol.r, rowcol.c);
         });
+        pastedData.selectedObjects.forEach(drawObject);
       } else throw asdf;
       context.restore();
     }
@@ -1120,6 +1128,7 @@ function render() {
       default: throw asdf;
     }
   }
+
   function drawObject(object) {
     switch (object.type) {
       case "snake":
@@ -1156,6 +1165,7 @@ function render() {
       default: throw asdf;
     }
   }
+
   function drawSpikes(r, c) {
     var x = c * tileSize;
     var y = r * tileSize;
@@ -1253,6 +1263,53 @@ function stringifyLevel(level) {
   if (!deepEquals(level, shouldBeTheSame)) throw asdf; // serialization is broken
 
   return output;
+}
+
+function previewPaste(hoverR, hoverC) {
+  var offsetR = hoverR - clipboardOffsetRowcol.r;
+  var offsetC = hoverC - clipboardOffsetRowcol.c;
+
+  var newLevel = JSON.parse(stringifyLevel(level));
+  var selectedLocations = [];
+  var selectedObjects = [];
+  clipboardData.selectedLocations.forEach(function(location) {
+    var tileCode = clipboardData.level.map[location];
+    var rowcol = getRowcol(clipboardData.level, location);
+    var r = rowcol.r + offsetR;
+    var c = rowcol.c + offsetC;
+    if (!isInBounds(newLevel, r, c)) return;
+    var newLocation = getLocation(newLevel, r, c);
+    newLevel.map[newLocation] = tileCode;
+    selectedLocations.push(newLocation);
+  });
+  clipboardData.selectedObjects.forEach(function(object) {
+    var newLocations = [];
+    for (var i = 0; i < object.locations.length; i++) {
+      var rowcol = getRowcol(clipboardData.level, object.locations[i]);
+      rowcol.r += offsetR;
+      rowcol.c += offsetC;
+      if (!isInBounds(newLevel, rowcol.r, rowcol.c)) {
+        // this location is oob
+        if (object.type === "snake") {
+          // snakes must be completely in bounds
+          return;
+        }
+        // just skip it
+        continue;
+      }
+      var newLocation = getLocation(newLevel, rowcol.r, rowcol.c);
+      newLocations.push(newLocation);
+    }
+    if (newLocations.length === 0) return; // can't have a non-present object
+    var newObject = JSON.parse(JSON.stringify(object));
+    newObject.locations = newLocations;
+    selectedObjects.push(newObject);
+  });
+  return {
+    level: newLevel,
+    selectedLocations: selectedLocations,
+    selectedObjects: selectedObjects,
+  };
 }
 
 function getNaiveOrthogonalPath(a, b) {
