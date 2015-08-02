@@ -199,11 +199,11 @@ document.addEventListener("keydown", function(event) {
     case 8:  // backspace
     case "Z".charCodeAt(0):
       if (modifierMask === 0) { unmove(); break; }
-      else if (modifierMask === CTRL) { unedit(); break; }
+      if (modifierMask === CTRL) { unedit(); break; }
       return;
     case "R".charCodeAt(0):
       if (modifierMask === 0) { reset(); break; }
-      else if (modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
+      if (modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
       return;
 
     case 220: // backslash
@@ -223,6 +223,7 @@ document.addEventListener("keydown", function(event) {
       return;
     case "X".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode(EXIT); break; }
+      if (modifierMask === CTRL) { cutSelection(); break; }
       return;
     case "F".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode("fruit"); break; }
@@ -238,6 +239,10 @@ document.addEventListener("keydown", function(event) {
       return;
     case "C".charCodeAt(0):
       if (modifierMask === 0) { toggleCollision(); break; }
+      if (modifierMask === CTRL) { copySelection(); break; }
+      return;
+    case "V".charCodeAt(0):
+      if (modifierMask === CTRL) { setPaintBrushTileCode("paste"); break; }
       return;
     case 32: // spacebar
     case 9:  // tab
@@ -293,8 +298,11 @@ var paintBrushBlockColorIndex = 0;
 var paintBrushObject = null;
 var selectionStart = null;
 var selectionEnd = null;
+var clipboardData = null;
+var clipboardOffsetRowcol = null;
 var paintButtonIdAndTileCodes = [
   ["selectButton", "select"],
+  ["pasteButton", "paste"],
   ["paintSpaceButton", SPACE],
   ["paintWallButton",  WALL],
   ["paintSpikeButton", SPIKE],
@@ -309,6 +317,12 @@ paintButtonIdAndTileCodes.forEach(function(pair) {
   document.getElementById(id).addEventListener("click", function() {
     setPaintBrushTileCode(tileCode);
   });
+});
+document.getElementById("copyButton").addEventListener("click", function() {
+  copySelection();
+});
+document.getElementById("cutButton").addEventListener("click", function() {
+  cutSelection();
 });
 document.getElementById("cheatGravityButton").addEventListener("click", function() {
   toggleGravity();
@@ -382,6 +396,10 @@ function selectAll() {
 }
 
 function setPaintBrushTileCode(tileCode) {
+  if (tileCode === "paste") {
+    // make sure we have something to paste
+    if (clipboardData == null) return;
+  }
   if (paintBrushTileCode === "select" && selectionStart != null && selectionEnd != null) {
     // usually this means to fill in the selection
     if (tileCode == null) {
@@ -431,9 +449,49 @@ function paintBrushTileCodeChanged() {
     }
     document.getElementById(id).style.background = backgroundStyle;
   });
+
+  var isSelectionMode = paintBrushTileCode === "select";
+  ["cutButton", "copyButton"].forEach(function (id) {
+    document.getElementById(id).disabled = !isSelectionMode;
+  });
+  document.getElementById("pasteButton").disabled = clipboardData == null;
+
   render();
 }
 
+function cutSelection() {
+  copySelection();
+  fillSelection(SPACE);
+  render();
+}
+function copySelection() {
+  var selectedLocations = getSelectedLocations();
+  if (selectedLocations.length === 0) return;
+  setClipboardData({
+    level: JSON.parse(stringifyLevel(level)),
+    selection: selectedLocations,
+  });
+}
+function setClipboardData(data) {
+  // find the center
+  var minR = Infinity;
+  var maxR = -Infinity;
+  var minC = Infinity;
+  var maxC = -Infinity;
+  data.selection.forEach(function(location) {
+    var rowcol = getRowcol(data.level, location);
+    if (rowcol.r < minR) minR = rowcol.r;
+    if (rowcol.r > maxR) maxR = rowcol.r;
+    if (rowcol.c < minC) minC = rowcol.c;
+    if (rowcol.c > maxC) maxC = rowcol.c;
+  });
+  var offsetR = Math.floor((minR + maxR) / 2);
+  var offsetC = Math.floor((minC + maxC) / 2);
+
+  clipboardData = data;
+  clipboardOffsetRowcol = {r:offsetR, c:offsetC};
+  paintBrushTileCodeChanged();
+}
 function fillSelection(tileCode) {
   var locations = getSelectedLocations();
   var objects = [];
@@ -446,6 +504,7 @@ function fillSelection(tileCode) {
   pushUneditFrame();
 }
 function getSelectedLocations() {
+  if (selectionStart == null || selectionEnd == null) return [];
   var rowcol1 = getRowcol(level, selectionStart);
   var rowcol2 = getRowcol(level, selectionEnd);
   var r1 = rowcol1.r;
@@ -500,6 +559,9 @@ function paintAtLocation(location) {
   } else if (paintBrushTileCode === "select") {
     // don't delete things while selecting
     objectHere = null;
+  } else if (paintBrushTileCode === "paste") {
+    // we've got a different check for this
+    objectHere = null;
   } else if (typeof paintBrushTileCode === "string") {
     if (objectHere != null && objectHere.type === paintBrushTileCode) {
       if (paintBrushTileCode === "fruit") {
@@ -536,16 +598,21 @@ function paintAtLocation(location) {
   }
 
   if (typeof paintBrushTileCode === "number") {
-    level.map[location] = paintBrushTileCode;
-    if (paintBrushTileCode === EXIT) {
-      // delete any other exits
-      for (var i = 0; i < level.map.length; i++) {
-        if (i === location) continue;
-        if (level.map[i] === EXIT) level.map[i] = SPACE;
-      }
-    }
+    paintTileAtLocation(location, paintBrushTileCode);
   } else if (paintBrushTileCode === "select") {
     selectionEnd = location;
+  } else if (paintBrushTileCode === "paste") {
+    var hoverRowcol = getRowcol(level, location);
+    clipboardData.selection.forEach(function(sourceLocation) {
+      var tileCode = clipboardData.level.map[sourceLocation];
+      var rowcol = getRowcol(clipboardData.level, sourceLocation);
+      var r = hoverRowcol.r + rowcol.r - clipboardOffsetRowcol.r;
+      var c = hoverRowcol.c + rowcol.c - clipboardOffsetRowcol.c;
+      var destLocation = getLocation(level, r, c);
+      var objectHere = findObjectAtLocation(destLocation);
+      if (objectHere != null) removeObject(objectHere);
+      paintTileAtLocation(destLocation, tileCode);
+    });
   } else if (typeof paintBrushTileCode === "string") {
     // make sure there's space behind us
     level.map[location] = SPACE;
@@ -587,8 +654,19 @@ function paintAtLocation(location) {
         break;
       default: throw asdf;
     }
-  }
+  } else throw asdf;
   render();
+
+  function paintTileAtLocation(location, tileCode) {
+    level.map[location] = tileCode;
+    if (tileCode === EXIT) {
+      // delete any other exits
+      for (var i = 0; i < level.map.length; i++) {
+        if (i === location) continue;
+        if (level.map[i] === EXIT) level.map[i] = SPACE;
+      }
+    }
+  }
 }
 
 var uneditBuffer = [];
@@ -994,13 +1072,13 @@ function renderLevel(context, level, onlyTheseObjects) {
 
   // editor hover
   if (persistentState.showEditor && hoverLocation != null && paintBrushTileCode != null) {
-    var rowcol = getRowcol(level, hoverLocation);
+    var hoverRowcol = getRowcol(level, hoverLocation);
     var objectHere = findObjectAtLocation(hoverLocation);
     context.save();
     context.globalAlpha = 0.2;
     if (typeof paintBrushTileCode === "number") {
       if (level.map[hoverLocation] !== paintBrushTileCode) {
-        drawTile(paintBrushTileCode, rowcol.r, rowcol.c);
+        drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c);
       }
     } else if (paintBrushTileCode === "fruit") {
       if (!(objectHere != null && objectHere.type === "fruit")) {
@@ -1016,6 +1094,15 @@ function renderLevel(context, level, onlyTheseObjects) {
       }
     } else if (paintBrushTileCode === "select") {
       void 0; // do nothing
+    } else if (paintBrushTileCode === "paste") {
+      // show what will be pasted if you click
+      clipboardData.selection.forEach(function(location) {
+        var tileCode = clipboardData.level.map[location];
+        var rowcol = getRowcol(clipboardData.level, location);
+        var r = hoverRowcol.r + rowcol.r - clipboardOffsetRowcol.r;
+        var c = hoverRowcol.c + rowcol.c - clipboardOffsetRowcol.c;
+        drawTile(tileCode, r, c);
+      });
     } else throw asdf;
     context.restore();
   }
