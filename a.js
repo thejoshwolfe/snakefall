@@ -1114,7 +1114,7 @@ function render() {
       context = savedContext;
       context.save();
       context.globalAlpha = 0.2;
-      context.drawImage(buffer, 10, 10);
+      context.drawImage(buffer, 0, 0);
       context.restore();
     }
   }
