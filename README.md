@@ -15,6 +15,7 @@ A [Snakebird](http://snakebird.noumenongames.com/) clone.
 * Editor:
   * Edit the game while it's running.
   * Place and edit everything the game engine supports.
+  * Select/Cut/Copy/Paste.
   * Cheatcodes to turn off gravity and collision detection (noclip) while editing.
   * Level data is json text that you can copy out and paste in. No server-side saving (because there's no server at all).
 
@@ -26,7 +27,6 @@ Important:
   * Enable Snakebird levels 30-38
   * Remove hard ceiling.
 * Editor:
-  * Select/Cut/Copy/Paste.
   * Resize the world.
   * Detect and show errors: collision/gravity violations, no snakes or no exit, etc.
   * Figure out how unmove and unedit should interact.
