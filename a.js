@@ -400,7 +400,7 @@ function setPaintBrushTileCode(tileCode) {
     // make sure we have something to paste
     if (clipboardData == null) return;
   }
-  if (paintBrushTileCode === "select" && selectionStart != null && selectionEnd != null) {
+  if (paintBrushTileCode === "select" && tileCode !== "select" && selectionStart != null && selectionEnd != null) {
     // usually this means to fill in the selection
     if (tileCode == null) {
       // cancel selection
@@ -1005,7 +1005,7 @@ function render() {
   context.fillRect(0, 0, canvas.width, canvas.height);
 
   // normal render
-  renderLevel(context, level);
+  renderLevel();
 
   if (persistentState.showEditor) {
     if (paintBrushTileCode === "block") {
@@ -1015,7 +1015,7 @@ function render() {
         context.fillStyle = "rgba(0, 0, 0, 0.8)";
         context.fillRect(0, 0, canvas.width, canvas.height);
         // and render just this object in focus
-        renderLevel(context, level, [activeBlock]);
+        renderLevel([activeBlock]);
       }
     } else if (paintBrushTileCode === "select") {
       getSelectedLocations().forEach(function(location) {
@@ -1030,7 +1030,7 @@ function render() {
 
   return; // this is the end of the function proper
 
-  function renderLevel(context, level, onlyTheseObjects) {
+  function renderLevel(onlyTheseObjects) {
     var objects = level.objects;
     if (onlyTheseObjects != null) objects = onlyTheseObjects;
     // begin by rendering the background connections for blocks
@@ -1073,10 +1073,15 @@ function render() {
 
     // editor hover
     if (persistentState.showEditor && hoverLocation != null && paintBrushTileCode != null) {
+
+      var savedContext = context;
+      var buffer = document.createElement("canvas");
+      buffer.width = canvas.width;
+      buffer.height = canvas.height;
+      context = buffer.getContext("2d");
+
       var hoverRowcol = getRowcol(level, hoverLocation);
       var objectHere = findObjectAtLocation(hoverLocation);
-      context.save();
-      context.globalAlpha = 0.2;
       if (typeof paintBrushTileCode === "number") {
         if (level.map[hoverLocation] !== paintBrushTileCode) {
           drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c);
@@ -1105,6 +1110,11 @@ function render() {
         });
         pastedData.selectedObjects.forEach(drawObject);
       } else throw asdf;
+
+      context = savedContext;
+      context.save();
+      context.globalAlpha = 0.2;
+      context.drawImage(buffer, 10, 10);
       context.restore();
     }
   }
