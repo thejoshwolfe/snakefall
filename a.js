@@ -521,13 +521,23 @@ function getSelectedLocations() {
     c1 = c2;
     c2 = tmp;
   }
-  var result = [];
+  var objects = [];
+  var locations = [];
   for (var r = r1; r <= r2; r++) {
     for (var c = c1; c <= c2; c++) {
-      result.push(getLocation(level, r, c));
+      var location = getLocation(level, r, c);
+      locations.push(location);
+      var object = findObjectAtLocation(location);
+      if (object != null) addIfNotPresent(objects, object);
     }
   }
-  return result;
+  // select the rest of any partially-selected objects
+  objects.forEach(function(object) {
+    object.locations.forEach(function(location) {
+      addIfNotPresent(locations, location);
+    });
+  });
+  return locations;
 }
 
 function newFruit(location) {
@@ -999,114 +1009,96 @@ function render() {
         renderLevel(context, level, [activeBlock]);
       }
     } else if (paintBrushTileCode === "select") {
-      if (selectionStart != null && selectionEnd != null) {
-        drawLargeRect(selectionStart, selectionEnd, "rgba(128, 128, 128, 0.3)");
-      }
+      getSelectedLocations().forEach(function(location) {
+        var rowcol = getRowcol(level, location);
+        drawRect(rowcol.r, rowcol.c, "rgba(128, 128, 128, 0.3)");
+      });
     }
   }
 
   // serialize
   document.getElementById("serializationTextarea").value = stringifyLevel(level);
 
-  function drawLargeRect(location1, location2, fillStyle) {
-    context.fillStyle = fillStyle;
-    var rowcol1 = getRowcol(level, location1);
-    var rowcol2 = getRowcol(level, location2);
-    var r1 = rowcol1.r;
-    var c1 = rowcol1.c;
-    var r2 = rowcol2.r;
-    var c2 = rowcol2.c;
-    if (r2 < r1) {
-      var tmp = r1;
-      r1 = r2;
-      r2 = tmp;
-    }
-    if (c2 < c1) {
-      var tmp = c1;
-      c1 = c2;
-      c2 = tmp;
-    }
-    context.fillRect(c1 * tileSize, r1 * tileSize, (c2 - c1 + 1) * tileSize, (r2 - r1 + 1) * tileSize);
-  }
-}
-function renderLevel(context, level, onlyTheseObjects) {
-  var objects = level.objects;
-  if (onlyTheseObjects != null) objects = onlyTheseObjects;
-  // begin by rendering the background connections for blocks
-  objects.forEach(function(object) {
-    if (object.type !== "block") return;
-    var color = blockColors[object.color].background;
-    for (var i = 0; i < object.locations.length - 1; i++) {
-      var rowcol1 = getRowcol(level, object.locations[i]);
-      var rowcol2 = getRowcol(level, object.locations[i + 1]);
-      var cornerRowcol = {r:rowcol1.r, c:rowcol2.c};
-      drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c, color);
-      drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c, color);
-    }
-  });
+  return; // this is the end of the function proper
 
-  // terrain
-  if (onlyTheseObjects == null) {
-    for (var r = 0; r < level.height; r++) {
-      for (var c = 0; c < level.width; c++) {
-        var tileCode = level.map[getLocation(level, r, c)];
-        drawTile(tileCode, r, c);
+  function renderLevel(context, level, onlyTheseObjects) {
+    var objects = level.objects;
+    if (onlyTheseObjects != null) objects = onlyTheseObjects;
+    // begin by rendering the background connections for blocks
+    objects.forEach(function(object) {
+      if (object.type !== "block") return;
+      var color = blockColors[object.color].background;
+      for (var i = 0; i < object.locations.length - 1; i++) {
+        var rowcol1 = getRowcol(level, object.locations[i]);
+        var rowcol2 = getRowcol(level, object.locations[i + 1]);
+        var cornerRowcol = {r:rowcol1.r, c:rowcol2.c};
+        drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c, color);
+        drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c, color);
+      }
+    });
+
+    // terrain
+    if (onlyTheseObjects == null) {
+      for (var r = 0; r < level.height; r++) {
+        for (var c = 0; c < level.width; c++) {
+          var tileCode = level.map[getLocation(level, r, c)];
+          drawTile(tileCode, r, c);
+        }
       }
     }
-  }
 
-  // objects
-  objects.forEach(drawObject);
+    // objects
+    objects.forEach(drawObject);
 
-  // banners
-  if (countSnakes() === 0) {
-    context.fillStyle = "#ff0";
-    context.font = "100px Arial";
-    context.fillText("You Win!", 0, canvas.height / 2);
-  }
-  if (isDead()) {
-    context.fillStyle = "#f00";
-    context.font = "100px Arial";
-    context.fillText("You Dead!", 0, canvas.height / 2);
-  }
+    // banners
+    if (countSnakes() === 0) {
+      context.fillStyle = "#ff0";
+      context.font = "100px Arial";
+      context.fillText("You Win!", 0, canvas.height / 2);
+    }
+    if (isDead()) {
+      context.fillStyle = "#f00";
+      context.font = "100px Arial";
+      context.fillText("You Dead!", 0, canvas.height / 2);
+    }
 
-  // editor hover
-  if (persistentState.showEditor && hoverLocation != null && paintBrushTileCode != null) {
-    var hoverRowcol = getRowcol(level, hoverLocation);
-    var objectHere = findObjectAtLocation(hoverLocation);
-    context.save();
-    context.globalAlpha = 0.2;
-    if (typeof paintBrushTileCode === "number") {
-      if (level.map[hoverLocation] !== paintBrushTileCode) {
-        drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c);
-      }
-    } else if (paintBrushTileCode === "fruit") {
-      if (!(objectHere != null && objectHere.type === "fruit")) {
-        drawObject(newFruit([hoverLocation]));
-      }
-    } else if (paintBrushTileCode === "snake") {
-      if (!(objectHere != null && objectHere.type === "snake" && objectHere.color === paintBrushSnakeColorIndex)) {
-        drawObject(newSnake(paintBrushSnakeColorIndex, hoverLocation));
-      }
-    } else if (paintBrushTileCode === "block") {
-      if (!(objectHere != null && objectHere.type === "block" && objectHere.color === paintBrushBlockColorIndex)) {
-        drawObject(newBlock(paintBrushSnakeColorIndex, hoverLocation));
-      }
-    } else if (paintBrushTileCode === "select") {
-      void 0; // do nothing
-    } else if (paintBrushTileCode === "paste") {
-      // show what will be pasted if you click
-      clipboardData.selection.forEach(function(location) {
-        var tileCode = clipboardData.level.map[location];
-        var rowcol = getRowcol(clipboardData.level, location);
-        var r = hoverRowcol.r + rowcol.r - clipboardOffsetRowcol.r;
-        var c = hoverRowcol.c + rowcol.c - clipboardOffsetRowcol.c;
-        drawTile(tileCode, r, c);
-      });
-    } else throw asdf;
-    context.restore();
+    // editor hover
+    if (persistentState.showEditor && hoverLocation != null && paintBrushTileCode != null) {
+      var hoverRowcol = getRowcol(level, hoverLocation);
+      var objectHere = findObjectAtLocation(hoverLocation);
+      context.save();
+      context.globalAlpha = 0.2;
+      if (typeof paintBrushTileCode === "number") {
+        if (level.map[hoverLocation] !== paintBrushTileCode) {
+          drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c);
+        }
+      } else if (paintBrushTileCode === "fruit") {
+        if (!(objectHere != null && objectHere.type === "fruit")) {
+          drawObject(newFruit([hoverLocation]));
+        }
+      } else if (paintBrushTileCode === "snake") {
+        if (!(objectHere != null && objectHere.type === "snake" && objectHere.color === paintBrushSnakeColorIndex)) {
+          drawObject(newSnake(paintBrushSnakeColorIndex, hoverLocation));
+        }
+      } else if (paintBrushTileCode === "block") {
+        if (!(objectHere != null && objectHere.type === "block" && objectHere.color === paintBrushBlockColorIndex)) {
+          drawObject(newBlock(paintBrushSnakeColorIndex, hoverLocation));
+        }
+      } else if (paintBrushTileCode === "select") {
+        void 0; // do nothing
+      } else if (paintBrushTileCode === "paste") {
+        // show what will be pasted if you click
+        clipboardData.selection.forEach(function(location) {
+          var tileCode = clipboardData.level.map[location];
+          var rowcol = getRowcol(clipboardData.level, location);
+          var r = hoverRowcol.r + rowcol.r - clipboardOffsetRowcol.r;
+          var c = hoverRowcol.c + rowcol.c - clipboardOffsetRowcol.c;
+          drawTile(tileCode, r, c);
+        });
+      } else throw asdf;
+      context.restore();
+    }
   }
-
   function drawTile(tileCode, r, c) {
     switch (tileCode) {
       case SPACE:
