@@ -352,6 +352,7 @@ var lastDraggingLocation = null;
 var hoverLocation = null;
 canvas.addEventListener("mousedown", function(event) {
   if (event.altKey) return;
+  if (event.button !== 0) return;
   if (!persistentState.showEditor || paintBrushTileCode == null) return;
   event.preventDefault();
   var location = getLocationFromEvent(event);
@@ -379,6 +380,13 @@ canvas.addEventListener("mousemove", function(event) {
       hoverLocation = location;
       render();
     }
+  }
+});
+canvas.addEventListener("mouseout", function() {
+  if (hoverLocation !== location) {
+    // turn off the hover when the mouse leaves
+    hoverLocation = null;
+    render();
   }
 });
 function getLocationFromEvent(event) {
