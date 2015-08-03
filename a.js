@@ -115,14 +115,14 @@ function validateLevel(level) {
 function pushUnmoveFrame() {
   if (unmoveBuffer.length !== 0) {
     // don't duplicate states
-    if (deepEquals(JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]), level.objects)) return;
+    if (deepEquals(JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]), level)) return;
   }
-  unmoveBuffer.push(JSON.stringify(level.objects));
+  unmoveBuffer.push(JSON.stringify(level));
 }
 function unmove() {
   if (unmoveBuffer.length <= 1) return; // already at the beginning
   unmoveBuffer.pop(); // that was the current state
-  level.objects = JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]);
+  level = JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]);
   render();
 }
 function reset() {
