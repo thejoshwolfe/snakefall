@@ -3,9 +3,9 @@ var canvas = document.getElementById("canvas");
 var SPACE = 0;
 var WALL = 1;
 var SPIKE = 2;
-var EXIT = 3;
-
-var validTileCodes = [SPACE, WALL, SPIKE, EXIT];
+var FRUIT = 3;
+var EXIT = 4;
+var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT];
 
 var level1 = {
   "height": 18,
@@ -14,14 +14,14 @@ var level1 = {
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,
+    0,0,3,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,
+    0,0,3,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,1,2,2,2,2,1,2,2,2,1,1,1,2,2,2,2,1,0,0,0,0,
     0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -38,22 +38,10 @@ var level1 = {
       "locations": [184]
     },
     {
-      "type": "fruit",
-      "locations": [89]
-    },
-    {
       "type": "snake",
       "color": 0,
       "dead": false,
       "locations": [64,65,90,115,114,113,88,63]
-    },
-    {
-      "type": "fruit",
-      "locations": [227]
-    },
-    {
-      "type": "fruit",
-      "locations": [252]
     },
     {
       "type": "snake",
@@ -95,9 +83,6 @@ function validateLevel(level) {
       if (level.map[location] == null) throw new Error("invalid location: " + JSON.stringify(location));
     });
     switch (object.type) {
-      case "fruit":
-        if (object.locations.length !== 1) throw new Error("a fruit object can only have a single location");
-        break;
       case "block":
         // it's all good
         break;
@@ -127,7 +112,7 @@ function unmove() {
 }
 function reset() {
   unmoveBuffer.splice(1);
-  level.objects = JSON.parse(unmoveBuffer[0]);
+  level = JSON.parse(unmoveBuffer[0]);
 }
 
 function deepEquals(a, b) {
@@ -227,7 +212,7 @@ document.addEventListener("keydown", function(event) {
       if (modifierMask === CTRL) { cutSelection(); break; }
       return;
     case "F".charCodeAt(0):
-      if (modifierMask === 0) { setPaintBrushTileCode("fruit"); break; }
+      if (modifierMask === 0) { setPaintBrushTileCode(FRUIT); break; }
       return;
     case "D".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode("snake"); break; }
@@ -310,7 +295,7 @@ var paintButtonIdAndTileCodes = [
   ["paintWallButton",  WALL],
   ["paintSpikeButton", SPIKE],
   ["paintExitButton", EXIT],
-  ["paintFruitButton", "fruit"],
+  ["paintFruitButton", FRUIT],
   ["paintSnakeButton", "snake"],
   ["paintBlockButton", "block"],
 ];
@@ -616,12 +601,6 @@ function addCol() {
   level.width += 1;
 }
 
-function newFruit(location) {
-  return {
-    type: "fruit",
-    locations: [location],
-  };
-}
 function newSnake(color, location) {
   return {
     type: "snake",
@@ -653,10 +632,7 @@ function paintAtLocation(location) {
     objectHere = null;
   } else if (typeof paintBrushTileCode === "string") {
     if (objectHere != null && objectHere.type === paintBrushTileCode) {
-      if (paintBrushTileCode === "fruit") {
-        // all fruit is the same
-        return;
-      } else if (paintBrushTileCode === "snake") {
+      if (paintBrushTileCode === "snake") {
         // only ignore this paint request if we're already clicking our own head
         if (objectHere.type === "snake" && objectHere.color === paintBrushSnakeColorIndex) {
           if (objectHere.locations[0] === location) return; // that's the head
@@ -719,10 +695,6 @@ function paintAtLocation(location) {
     // make sure there's space behind us
     level.map[location] = SPACE;
     switch (paintBrushTileCode) {
-      case "fruit":
-        var newObject = newFruit(location);
-        level.objects.push(newObject);
-        break;
       case "snake":
         if (paintBrushObject == null) {
           var thereWereNoSnakes = countSnakes() === 0;
@@ -828,19 +800,18 @@ function move(dr, dc) {
 
   if (isCollision()) {
     var newTile = level.map[newLocation];
-    if (!isTileCodeAir(newTile)) return;
-    var otherObject = findObjectAtLocation(newLocation);
-    if (otherObject != null) {
-      if (otherObject === activeSnake) return; // can't push yourself
-      if (otherObject.type === "fruit") {
-        // eat
-        removeObject(otherObject);
-        ate = true;
-      } else {
+    if (newTile === FRUIT) {
+      // eat
+      level.map[newLocation] = SPACE;
+      ate = true;
+    } else if (isTileCodeAir(newTile)) {
+      var otherObject = findObjectAtLocation(newLocation);
+      if (otherObject != null) {
+        if (otherObject === activeSnake) return; // can't push yourself
         // push objects
         if (!pushOrFallOrSomething(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
       }
-    }
+    } else return; // can't go through that tile
   }
 
   // move to empty space
@@ -856,7 +827,7 @@ function move(dr, dc) {
     var didAnything = false;
 
     // check for exit
-    if (countFruit() === 0) {
+    if (!isUneatenFruit()) {
       var snakes = getSnakes();
       for (var i = 0; i < snakes.length; i++) {
         if (level.map[snakes[i].locations[0]] === EXIT) {
@@ -870,7 +841,6 @@ function move(dr, dc) {
     // fall
     var dyingObjects = [];
     var fallingObjects = level.objects.filter(function(object) {
-      if (object.type === "fruit") return false;
       var theseDyingObjects = [];
       if (!pushOrFallOrSomething(null, object, 1, 0, [], theseDyingObjects)) return false;
       // this object can fall. maybe more will fall with it too. we'll check those separately.
@@ -939,10 +909,6 @@ function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects, dyin
             // for some reason this is ok.
             continue;
           }
-          return false;
-        }
-        if (yetAnotherObject.type === "fruit") {
-          // can't indirectly push fruit
           return false;
         }
         addIfNotPresent(pushedObjects, yetAnotherObject);
@@ -1039,8 +1005,11 @@ function findObjectAtLocation(location) {
   }
   return null;
 }
-function countFruit() {
-  return getObjectsOfType("fruit").length;
+function isUneatenFruit() {
+  for (var i = 0; i < level.map.length; i++) {
+    if (level.map[i] === FRUIT) return true;
+  }
+  return false;
 }
 function countSnakes() {
   return getSnakes().length;
@@ -1167,10 +1136,6 @@ function render() {
         if (level.map[hoverLocation] !== paintBrushTileCode) {
           drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c);
         }
-      } else if (paintBrushTileCode === "fruit") {
-        if (!(objectHere != null && objectHere.type === "fruit")) {
-          drawObject(newFruit([hoverLocation]));
-        }
       } else if (paintBrushTileCode === "snake") {
         if (!(objectHere != null && objectHere.type === "snake" && objectHere.color === paintBrushSnakeColorIndex)) {
           drawObject(newSnake(paintBrushSnakeColorIndex, hoverLocation));
@@ -1211,8 +1176,11 @@ function render() {
       case SPIKE:
         drawSpikes(r, c);
         break;
+      case FRUIT:
+        drawCircle(r, c, "#f0f");
+        break;
       case EXIT:
-        var radiusFactor = countFruit() === 0 ? 1.2 : 0.7;
+        var radiusFactor = isUneatenFruit() ? 0.7 : 1.2;
         drawQuarterPie(r, c, radiusFactor, "#f00", 0);
         drawQuarterPie(r, c, radiusFactor, "#0f0", 1);
         drawQuarterPie(r, c, radiusFactor, "#00f", 2);
@@ -1250,10 +1218,6 @@ function render() {
           var rowcol = getRowcol(level, location);
           drawRect(rowcol.r, rowcol.c, color);
         });
-        break;
-      case "fruit":
-        var rowcol = getRowcol(level, object.locations[0]);
-        drawCircle(rowcol.r, rowcol.c, "#f0f");
         break;
       default: throw asdf;
     }
