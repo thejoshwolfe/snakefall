@@ -33,21 +33,21 @@ var level1 = {
   "objects": [
     {
       "type": "snake",
+      "color": 0,
+      "dead": false,
+      "locations": [254,253,278]
+    },
+    {
+      "type": "snake",
       "color": 1,
       "dead": false,
       "locations": [184]
     },
     {
       "type": "snake",
-      "color": 0,
-      "dead": false,
-      "locations": [64,65,90,115,114,113,88,63]
-    },
-    {
-      "type": "snake",
       "color": 2,
       "dead": false,
-      "locations": [254,253,278]
+      "locations": [64,65,90,115,114,113,88,63]
     }
   ]
 };
@@ -103,16 +103,21 @@ function pushUnmoveFrame() {
     if (deepEquals(JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]), level)) return;
   }
   unmoveBuffer.push(JSON.stringify(level));
+  unmoveBufferChanged();
 }
 function unmove() {
   if (unmoveBuffer.length <= 1) return; // already at the beginning
   unmoveBuffer.pop(); // that was the current state
   level = JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]);
-  render();
+  unmoveBufferChanged();
 }
 function reset() {
   unmoveBuffer.splice(1);
   level = JSON.parse(unmoveBuffer[0]);
+  unmoveBufferChanged();
+}
+function unmoveBufferChanged() {
+  document.getElementById("movesSpan").textContent = (unmoveBuffer.length - 1).toString();
 }
 
 function deepEquals(a, b) {
@@ -182,6 +187,11 @@ document.addEventListener("keydown", function(event) {
       if (modifierMask === 0) { move(1, 0); break; }
       return;
     case 8:  // backspace
+      if (modifierMask === 0) { unmove(); break; }
+      return;
+    case "Q".charCodeAt(0):
+      if (modifierMask === 0) { unmove(); break; }
+      return;
     case "Z".charCodeAt(0):
       if (modifierMask === 0) { unmove(); break; }
       if (modifierMask === CTRL) { unedit(); break; }
@@ -195,17 +205,20 @@ document.addEventListener("keydown", function(event) {
       if (modifierMask === 0) { toggleShowEditor(); break; }
       return;
     case "A".charCodeAt(0):
-      if (modifierMask === CTRL) { selectAll(); break; }
+      if (!persistentState.showEditor && modifierMask === 0) { move(0, -1); break; }
+      if ( persistentState.showEditor && modifierMask === CTRL) { selectAll(); break; }
       return;
     case "E".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode(SPACE); break; }
       return;
     case "W".charCodeAt(0):
-      if (modifierMask === 0) { setPaintBrushTileCode(WALL); break; }
+      if (!persistentState.showEditor && modifierMask === 0) { move(-1, 0); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(WALL); break; }
       return;
     case "S".charCodeAt(0):
-      if (modifierMask === 0) { setPaintBrushTileCode(SPIKE); break; }
-      if (modifierMask === SHIFT) { setPaintBrushTileCode("resize"); break; }
+      if (!persistentState.showEditor && modifierMask === 0) { move(1, 0); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(SPIKE); break; }
+      if ( persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("resize"); break; }
       return;
     case "X".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode(EXIT); break; }
@@ -215,7 +228,8 @@ document.addEventListener("keydown", function(event) {
       if (modifierMask === 0) { setPaintBrushTileCode(FRUIT); break; }
       return;
     case "D".charCodeAt(0):
-      if (modifierMask === 0) { setPaintBrushTileCode("snake"); break; }
+      if (!persistentState.showEditor && modifierMask === 0) { move(0, 1); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode("snake"); break; }
       return;
     case "B".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode("block"); break; }
@@ -233,12 +247,19 @@ document.addEventListener("keydown", function(event) {
     case 32: // spacebar
     case 9:  // tab
       if (modifierMask === 0) {
+        switchSnakes();
+        break;
+      }
+      return;
+    case "1".charCodeAt(0):
+    case "2".charCodeAt(0):
+    case "3".charCodeAt(0):
+    case "4".charCodeAt(0):
+      var index = event.keyCode - "1".charCodeAt(0);
+      if (modifierMask === 0) {
         if (isAlive()) {
-          var snakes = getSnakes();
-          for (var i = 0; i < snakes.length; i++) {
-            if (snakes[i].color !== activeSnakeColor) continue;
-            activeSnakeColor = snakes[(i + 1) % snakes.length].color;
-            break;
+          if (findSnakeOfColor(index) != null) {
+            activeSnakeColor = index;
           }
         }
         break;
@@ -255,6 +276,29 @@ document.addEventListener("keydown", function(event) {
   event.preventDefault();
   render();
 });
+
+document.getElementById("switchSnakesButton").addEventListener("click", function() {
+  switchSnakes();
+  render();
+});
+function switchSnakes() {
+  if (!isAlive()) return;
+  var snakes = getSnakes();
+  for (var i = 0; i < snakes.length; i++) {
+    if (snakes[i].color !== activeSnakeColor) continue;
+    activeSnakeColor = snakes[(i + 1) % snakes.length].color;
+    return;
+  }
+}
+document.getElementById("restartButton").addEventListener("click", function() {
+  reset();
+  render();
+});
+document.getElementById("unmoveButton").addEventListener("click", function() {
+  unmove();
+  render();
+});
+
 document.getElementById("showHideEditor").addEventListener("click", function() {
   toggleShowEditor();
 });
@@ -783,6 +827,7 @@ function showEditorChanged() {
   ["editorDiv", "editorPane"].forEach(function(id) {
     document.getElementById(id).style.display = persistentState.showEditor ? "block" : "none";
   });
+  document.getElementById("wasdSpan").textContent = persistentState.showEditor ? "" : "/WASD";
 
   render();
 }
