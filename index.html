@@ -1,6 +1,6 @@
 <html>
   <body>
-    <table><tr>
+    <table style="margin:0px auto;"><tr>
       <td><canvas id="canvas" width=750 height=600></canvas></td>
       <td id="editorPane" style="display:none;">
         <table>
@@ -21,12 +21,13 @@
         </table>
       </td>
     </tr></table>
-    <div>Controls (hover for hotkeys):
-      Arrows<span id="wasdSpan">/WASD</span> to move,
-      <input type="button" id="switchSnakesButton" value="Switch Snakes" title="Spacebar, Tab, 1 - Red, 2 - Green, 3 - Blue, 4 - Yellow">,
-      <input type="button" id="restartButton" value="Restart" title="R">,
-      <input type="button" id="unmoveButton" value="Unmove" title="Backspace, Z, Q">
-      moves: <span id="movesSpan">0</span>.
+    <div style="text-align:center;">Controls (hover for hotkeys):<br>
+      Arrows<span id="wasdSpan">/WASD</span> to move
+      <input type="button" id="switchSnakesButton" value="Switch Snakes" title="Spacebar, Tab, 1 - Red, 2 - Green, 3 - Blue, 4 - Yellow"><br>
+      <input type="button" id="unmoveButton" value="Unmove <<" title="Backspace, Z, Q">
+      moves: <span id="movesSpan">0</span>
+      <input type="button" id="removeButton" value=">> Re-move" title="Y, Shift+Backspace, Shift+Z, Shift+Q">
+      <input type="button" id="restartButton" value="Restart" title="R">
     </div>
 
     <input id="showHideEditor" type="button" value="Show Editor Stuff" title="\">

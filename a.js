@@ -8,57 +8,58 @@ var EXIT = 4;
 var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT];
 
 var level1 = {
-  "height": 18,
-  "width": 25,
+  "height": 17,
+  "width": 29,
   "map": [
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,
-    0,0,3,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,
-    0,0,3,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,1,2,2,2,2,1,2,2,2,1,1,1,2,2,2,2,1,0,0,0,0,
-    0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,3,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,4,0,0,
+    0,0,3,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,1,2,2,0,0,0,0,2,2,1,1,1,2,2,0,0,0,0,2,2,1,0,0,0,0,
+    0,0,0,0,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
   ],
   "objects": [
     {
       "type": "snake",
       "color": 0,
       "dead": false,
-      "locations": [254,253,278]
+      "locations": [323,322,351]
     },
     {
       "type": "snake",
       "color": 1,
       "dead": false,
-      "locations": [184]
+      "locations": [43]
     },
     {
       "type": "snake",
       "color": 2,
       "dead": false,
-      "locations": [64,65,90,115,114,113,88,63]
+      "locations": [101,102,131,160,159,158,129,100]
     }
   ]
 };
 var tileSize = 30;
 var level;
 var unmoveBuffer = [];
+var unmoveCursor = 0;
 function loadLevel(newLevel) {
   level = newLevel;
 
   activateAnySnakePlease();
   unmoveBuffer = [];
+  unmoveCursor = 0;
   pushUnmoveFrame();
   pushUneditFrame();
   render();
@@ -98,26 +99,38 @@ function validateLevel(level) {
 }
 
 function pushUnmoveFrame() {
-  if (unmoveBuffer.length !== 0) {
+  if (unmoveCursor < unmoveBuffer.length) {
     // don't duplicate states
-    if (deepEquals(JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]), level)) return;
+    if (deepEquals(JSON.parse(unmoveBuffer[unmoveCursor - 1]), level)) return;
   }
+  unmoveBuffer.splice(unmoveCursor);
   unmoveBuffer.push(JSON.stringify(level));
+  unmoveCursor += 1;
   unmoveBufferChanged();
 }
 function unmove() {
-  if (unmoveBuffer.length <= 1) return; // already at the beginning
-  unmoveBuffer.pop(); // that was the current state
-  level = JSON.parse(unmoveBuffer[unmoveBuffer.length - 1]);
+  if (unmoveCursor <= 1) return; // already at the beginning
+  unmoveCursor -= 1;
+  level = JSON.parse(unmoveBuffer[unmoveCursor - 1]);
+  unmoveBufferChanged();
+}
+function remove() {
+  // re-move. redo an unmove.
+  if (unmoveCursor === unmoveBuffer.length) return; // nothing to redo
+  unmoveCursor += 1;
+  level = JSON.parse(unmoveBuffer[unmoveCursor - 1]);
   unmoveBufferChanged();
 }
 function reset() {
-  unmoveBuffer.splice(1);
-  level = JSON.parse(unmoveBuffer[0]);
+  unmoveCursor = 1;
+  level = JSON.parse(unmoveBuffer[unmoveCursor - 1]);
   unmoveBufferChanged();
 }
 function unmoveBufferChanged() {
-  document.getElementById("movesSpan").textContent = (unmoveBuffer.length - 1).toString();
+  var redoCount = unmoveBuffer.length - unmoveCursor;
+  var movesText = (unmoveCursor - 1) + "+" + redoCount;
+  document.getElementById("movesSpan").textContent = movesText;
+  document.getElementById("removeButton").disabled = redoCount === 0;
 }
 
 function deepEquals(a, b) {
@@ -187,14 +200,20 @@ document.addEventListener("keydown", function(event) {
       if (modifierMask === 0) { move(1, 0); break; }
       return;
     case 8:  // backspace
-      if (modifierMask === 0) { unmove(); break; }
+      if (modifierMask === 0)     { unmove(); break; }
+      if (modifierMask === SHIFT) { remove(); break; }
       return;
     case "Q".charCodeAt(0):
-      if (modifierMask === 0) { unmove(); break; }
+      if (modifierMask === 0)     { unmove(); break; }
+      if (modifierMask === SHIFT) { remove(); break; }
       return;
     case "Z".charCodeAt(0):
-      if (modifierMask === 0) { unmove(); break; }
-      if (modifierMask === CTRL) { unedit(); break; }
+      if (modifierMask === 0)     { unmove(); break; }
+      if (modifierMask === SHIFT) { remove(); break; }
+      if (modifierMask === CTRL)  { unedit(); break; }
+      return;
+    case "Y".charCodeAt(0):
+      if (modifierMask === 0)     { remove(); break; }
       return;
     case "R".charCodeAt(0):
       if (modifierMask === 0) { reset(); break; }
@@ -296,6 +315,10 @@ document.getElementById("restartButton").addEventListener("click", function() {
 });
 document.getElementById("unmoveButton").addEventListener("click", function() {
   unmove();
+  render();
+});
+document.getElementById("removeButton").addEventListener("click", function() {
+  remove();
   render();
 });
 
