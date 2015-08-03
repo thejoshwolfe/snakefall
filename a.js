@@ -52,16 +52,18 @@ var level1 = {
 };
 var tileSize = 30;
 var level;
-var unmoveBuffer = [];
-var unmoveCursor = 0;
+var unmoveStuff = {buffer:[], cursor:0, spanId:"movesSpan", redoButtonId:"removeButton"};
+var uneditStuff = {buffer:[], cursor:0, spanId:"editsSpan", redoButtonId:"reeditButton"};
 function loadLevel(newLevel) {
   level = newLevel;
 
   activateAnySnakePlease();
-  unmoveBuffer = [];
-  unmoveCursor = 0;
-  pushUnmoveFrame();
-  pushUneditFrame();
+  unmoveStuff.buffer = []
+  unmoveStuff.cursor = 0;
+  uneditStuff.buffer = []
+  uneditStuff.cursor = 0;
+  pushUndo(unmoveStuff);
+  pushUndo(uneditStuff);
   render();
 }
 function validateLevel(level) {
@@ -98,40 +100,6 @@ function validateLevel(level) {
   return level;
 }
 
-function pushUnmoveFrame() {
-  if (unmoveCursor < unmoveBuffer.length) {
-    // don't duplicate states
-    if (deepEquals(JSON.parse(unmoveBuffer[unmoveCursor - 1]), level)) return;
-  }
-  unmoveBuffer.splice(unmoveCursor);
-  unmoveBuffer.push(JSON.stringify(level));
-  unmoveCursor += 1;
-  unmoveBufferChanged();
-}
-function unmove() {
-  if (unmoveCursor <= 1) return; // already at the beginning
-  unmoveCursor -= 1;
-  level = JSON.parse(unmoveBuffer[unmoveCursor - 1]);
-  unmoveBufferChanged();
-}
-function remove() {
-  // re-move. redo an unmove.
-  if (unmoveCursor === unmoveBuffer.length) return; // nothing to redo
-  unmoveCursor += 1;
-  level = JSON.parse(unmoveBuffer[unmoveCursor - 1]);
-  unmoveBufferChanged();
-}
-function reset() {
-  unmoveCursor = 1;
-  level = JSON.parse(unmoveBuffer[unmoveCursor - 1]);
-  unmoveBufferChanged();
-}
-function unmoveBufferChanged() {
-  var redoCount = unmoveBuffer.length - unmoveCursor;
-  var movesText = (unmoveCursor - 1) + "+" + redoCount;
-  document.getElementById("movesSpan").textContent = movesText;
-  document.getElementById("removeButton").disabled = redoCount === 0;
-}
 
 function deepEquals(a, b) {
   if (a == null) return b == null;
@@ -200,23 +168,25 @@ document.addEventListener("keydown", function(event) {
       if (modifierMask === 0) { move(1, 0); break; }
       return;
     case 8:  // backspace
-      if (modifierMask === 0)     { unmove(); break; }
-      if (modifierMask === SHIFT) { remove(); break; }
+      if (modifierMask === 0)     { undo(unmoveStuff); break; }
+      if (modifierMask === SHIFT) { redo(unmoveStuff); break; }
       return;
     case "Q".charCodeAt(0):
-      if (modifierMask === 0)     { unmove(); break; }
-      if (modifierMask === SHIFT) { remove(); break; }
+      if (modifierMask === 0)     { undo(unmoveStuff); break; }
+      if (modifierMask === SHIFT) { redo(unmoveStuff); break; }
       return;
     case "Z".charCodeAt(0):
-      if (modifierMask === 0)     { unmove(); break; }
-      if (modifierMask === SHIFT) { remove(); break; }
-      if (modifierMask === CTRL)  { unedit(); break; }
+      if (modifierMask === 0)     { undo(unmoveStuff); break; }
+      if (modifierMask === SHIFT) { redo(unmoveStuff); break; }
+      if (persistentState.showEditor && modifierMask === CTRL)        { undo(uneditStuff); break; }
+      if (persistentState.showEditor && modifierMask === CTRL|SHIFT)  { redo(uneditStuff); break; }
       return;
     case "Y".charCodeAt(0):
-      if (modifierMask === 0)     { remove(); break; }
+      if (modifierMask === 0)     { redo(unmoveStuff); break; }
+      if (persistentState.showEditor && modifierMask === CTRL)  { redo(uneditStuff); break; }
       return;
     case "R".charCodeAt(0):
-      if (modifierMask === 0) { reset(); break; }
+      if (modifierMask === 0) { reset(unmoveStuff); break; }
       if (modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
       return;
 
@@ -310,15 +280,15 @@ function switchSnakes() {
   }
 }
 document.getElementById("restartButton").addEventListener("click", function() {
-  reset();
+  reset(unmoveStuff);
   render();
 });
 document.getElementById("unmoveButton").addEventListener("click", function() {
-  unmove();
+  undo(unmoveStuff);
   render();
 });
 document.getElementById("removeButton").addEventListener("click", function() {
-  remove();
+  redo(unmoveStuff);
   render();
 });
 
@@ -373,6 +343,14 @@ paintButtonIdAndTileCodes.forEach(function(pair) {
     setPaintBrushTileCode(tileCode);
   });
 });
+document.getElementById("uneditButton").addEventListener("click", function() {
+  undo(uneditStuff);
+  render();
+});
+document.getElementById("reeditButton").addEventListener("click", function() {
+  redo(uneditStuff);
+  render();
+});
 document.getElementById("copyButton").addEventListener("click", function() {
   copySelection();
 });
@@ -421,7 +399,7 @@ document.addEventListener("mouseup", function(event) {
   lastDraggingRowcol = null;
   paintBrushObject = null;
   resizeDragAnchorRowcol = null;
-  pushUneditFrame();
+  pushUndo(uneditStuff);
 });
 canvas.addEventListener("mousemove", function(event) {
   if (!persistentState.showEditor) return;
@@ -581,7 +559,7 @@ function fillSelection(tileCode) {
     if (object != null) addIfNotPresent(objects, object);
   });
   objects.forEach(removeObject);
-  pushUneditFrame();
+  pushUndo(uneditStuff);
 }
 function getSelectedLocations() {
   if (selectionStart == null || selectionEnd == null) return [];
@@ -809,19 +787,39 @@ function paintAtLocation(location) {
   }
 }
 
-var uneditBuffer = [];
-function pushUneditFrame() {
-  if (uneditBuffer.length !== 0) {
+function pushUndo(undoStuff) {
+  if (undoStuff.buffer.length > 0) {
     // don't duplicate states
-    if (deepEquals(JSON.parse(uneditBuffer[uneditBuffer.length - 1]), level)) return;
+    if (deepEquals(JSON.parse(undoStuff.buffer[undoStuff.cursor - 1]), level)) return;
   }
-  uneditBuffer.push(JSON.stringify(level));
+  undoStuff.buffer.splice(undoStuff.cursor);
+  undoStuff.buffer.push(JSON.stringify(level));
+  undoStuff.cursor += 1;
+  undoStuffChanged(undoStuff);
 }
-function unedit() {
-  if (uneditBuffer.length <= 1) return; // already at the beginning
-  uneditBuffer.pop(); // that was the current state
-  level = JSON.parse(uneditBuffer[uneditBuffer.length - 1]);
-  render();
+function undo(undoStuff) {
+  if (undoStuff.cursor <= 1) return; // already at the beginning
+  undoStuff.cursor -= 1;
+  level = JSON.parse(undoStuff.buffer[undoStuff.cursor - 1]);
+  undoStuffChanged(undoStuff);
+}
+function redo(undoStuff) {
+  // re-move. redo an unmove.
+  if (undoStuff.cursor === undoStuff.buffer.length) return; // nothing to redo
+  undoStuff.cursor += 1;
+  level = JSON.parse(undoStuff.buffer[undoStuff.cursor - 1]);
+  undoStuffChanged(undoStuff);
+}
+function reset(undoStuff) {
+  undoStuff.cursor = 1;
+  level = JSON.parse(undoStuff.buffer[undoStuff.cursor - 1]);
+  undoStuffChanged(undoStuff);
+}
+function undoStuffChanged(undoStuff) {
+  var redoCount = undoStuff.buffer.length - undoStuff.cursor;
+  var movesText = (undoStuff.cursor - 1) + "+" + redoCount;
+  document.getElementById(undoStuff.spanId).textContent = movesText;
+  document.getElementById(undoStuff.redoButtonId).disabled = redoCount === 0;
 }
 
 var persistentState = {
@@ -942,7 +940,7 @@ function move(dr, dc) {
     render();
   }
 
-  pushUnmoveFrame();
+  pushUndo(unmoveStuff);
   render();
 }
 
