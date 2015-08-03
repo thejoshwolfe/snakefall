@@ -15,7 +15,8 @@ A [Snakebird](http://snakebird.noumenongames.com/) clone.
 * Editor:
   * Edit the game while it's running.
   * Place and edit everything the game engine supports.
-  * Select/Cut/Copy/Paste.
+  * Resize the world.
+  * Select/Cut/Copy/Paste (but not between browser tabs).
   * Cheatcodes to turn off gravity and collision detection (noclip) while editing.
   * Level data is json text that you can copy out and paste in. No server-side saving (because there's no server at all).
 
@@ -27,7 +28,6 @@ Important:
   * Enable Snakebird levels 30-38
   * Remove hard ceiling.
 * Editor:
-  * Resize the world.
   * Detect and show errors: collision/gravity violations, no snakes or no exit, etc.
   * Figure out how unmove and unedit should interact.
   * Stabilize level format: version numbers, upconversions.
@@ -37,6 +37,7 @@ Important:
   * Ability to queue up several levels and play them all in sequence.
   * Consider encoding level data in a url to share easily.
   * Consider server-based community hub for sharing and rating levels.
+* See also the [issue tracker](https://github.com/thejoshwolfe/snakefall/issues).
 
 Fun stuff maybe someday:
 

@@ -760,14 +760,13 @@ function paintAtLocation(location) {
   render();
 
   function paintTileAtLocation(location, tileCode) {
-    level.map[location] = tileCode;
     if (tileCode === EXIT) {
       // delete any other exits
       for (var i = 0; i < level.map.length; i++) {
-        if (i === location) continue;
         if (level.map[i] === EXIT) level.map[i] = SPACE;
       }
     }
+    level.map[location] = tileCode;
   }
 }
 
