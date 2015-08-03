@@ -634,7 +634,7 @@ function removeCol() {
 function addCol() {
   var c = level.width - 1;
   for (var r = level.height - 1; r >= 0; r--) {
-    level.map.splice(getLocation(level, r, c), 0, SPACE);
+    level.map.splice(getLocation(level, r, c) + 1, 0, SPACE);
   }
 
   level.objects.forEach(function(object) {
