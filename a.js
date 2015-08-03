@@ -482,7 +482,7 @@ function copySelection() {
   setClipboardData({
     level: JSON.parse(stringifyLevel(level)),
     selectedLocations: selectedLocations,
-    selectedObjects: selectedObjects,
+    selectedObjects: JSON.parse(JSON.stringify(selectedObjects)),
   });
 }
 function setClipboardData(data) {
