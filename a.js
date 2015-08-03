@@ -220,6 +220,7 @@ document.addEventListener("keydown", function(event) {
       return;
     case "S".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode(SPIKE); break; }
+      if (modifierMask === SHIFT) { setPaintBrushTileCode("resize"); break; }
       return;
     case "X".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode(EXIT); break; }
@@ -298,9 +299,11 @@ var paintBrushBlockColorIndex = 0;
 var paintBrushObject = null;
 var selectionStart = null;
 var selectionEnd = null;
+var resizeDragAnchorRowcol = null;
 var clipboardData = null;
 var clipboardOffsetRowcol = null;
 var paintButtonIdAndTileCodes = [
+  ["resizeButton", "resize"],
   ["selectButton", "select"],
   ["pasteButton", "paste"],
   ["paintSpaceButton", SPACE],
@@ -348,7 +351,8 @@ function refreshCheatButtonText() {
   document.getElementById("cheatCollisionButton").style.background = isCollisionEnabled ? "" : "#f88";
 }
 
-var lastDraggingLocation = null;
+// be careful with location vs rowcol, because this variable is used when resizing
+var lastDraggingRowcol = null;
 var hoverLocation = null;
 canvas.addEventListener("mousedown", function(event) {
   if (event.altKey) return;
@@ -356,23 +360,33 @@ canvas.addEventListener("mousedown", function(event) {
   if (!persistentState.showEditor || paintBrushTileCode == null) return;
   event.preventDefault();
   var location = getLocationFromEvent(event);
-  lastDraggingLocation = location;
+  lastDraggingRowcol = getRowcol(level, location);
   if (paintBrushTileCode === "select") selectionStart = location;
-  paintAtLocation(lastDraggingLocation);
+  if (paintBrushTileCode === "resize") resizeDragAnchorRowcol = lastDraggingRowcol;
+  paintAtLocation(location);
 });
 document.addEventListener("mouseup", function(event) {
-  lastDraggingLocation = null;
+  lastDraggingRowcol = null;
   paintBrushObject = null;
+  resizeDragAnchorRowcol = null;
   pushUneditFrame();
 });
 canvas.addEventListener("mousemove", function(event) {
   if (!persistentState.showEditor) return;
   var location = getLocationFromEvent(event);
-  if (lastDraggingLocation != null) {
+  var mouseRowcol = getRowcol(level, location);
+  if (lastDraggingRowcol != null) {
     // Dragging Force - Through the Fruit and Flames
-    var path = getNaiveOrthogonalPath(lastDraggingLocation, location);
-    path.forEach(paintAtLocation);
-    lastDraggingLocation = location;
+    var lastDraggingLocation = getLocation(level, lastDraggingRowcol.r, lastDraggingRowcol.c);
+    // we need to get rowcols for everything before we start dragging, because dragging might resize the world.
+    var path = getNaiveOrthogonalPath(lastDraggingLocation, location).map(function(location) {
+      return getRowcol(level, location);
+    });
+    path.forEach(function(rowcol) {
+      // convert to location at the last minute in case each of these steps is changing the coordinate system.
+      paintAtLocation(getLocation(level, rowcol.r, rowcol.c));
+    });
+    lastDraggingRowcol = mouseRowcol;
     hoverLocation = null;
   } else {
     // hovering
@@ -554,6 +568,54 @@ function getSelectedLocations() {
   return locations;
 }
 
+function removeRow() {
+  var r = level.height - 1;
+  for (var c = 0; c < level.width; c++) {
+    var object = findObjectAtLocation(getLocation(level, r, c));
+    if (object != null) removeObject(object);
+  }
+  level.map.splice(getLocation(level, r, 0));
+  level.height -= 1;
+}
+function addRow() {
+  for (var c = 0; c < level.width; c++) {
+    level.map.push(SPACE);
+  }
+  level.height += 1;
+}
+function removeCol() {
+  var c = level.width - 1;
+  for (var r = 0; r < level.height; r++) {
+    var object = findObjectAtLocation(getLocation(level, r, c));
+    if (object != null) removeObject(object);
+  }
+  for (var r = level.height - 1; r >= 0; r--) {
+    level.map.splice(getLocation(level, r, c), 1);
+  }
+
+  level.objects.forEach(function(object) {
+    for (var i = 0; i < object.locations.length; i++) {
+      object.locations[i] = Math.floor((object.locations[i] + 1) * (level.width - 1) / level.width);
+    }
+  });
+
+  level.width -= 1;
+}
+function addCol() {
+  var c = level.width - 1;
+  for (var r = level.height - 1; r >= 0; r--) {
+    level.map.splice(getLocation(level, r, c), 0, SPACE);
+  }
+
+  level.objects.forEach(function(object) {
+    for (var i = 0; i < object.locations.length; i++) {
+      object.locations[i] = Math.floor(object.locations[i] * (level.width + 1) / level.width);
+    }
+  });
+
+  level.width += 1;
+}
+
 function newFruit(location) {
   return {
     type: "fruit",
@@ -583,6 +645,9 @@ function paintAtLocation(location) {
   } else if (paintBrushTileCode === "select") {
     // don't delete things while selecting
     objectHere = null;
+  } else if (paintBrushTileCode === "resize") {
+    // don't delete things under the mouse while resizing
+    objectHere = null;
   } else if (paintBrushTileCode === "paste") {
     // we've got a different check for this
     objectHere = null;
@@ -610,7 +675,7 @@ function paintAtLocation(location) {
           // don't blindly delete the object
           objectHere = null;
         }
-      }
+      } else throw asdf;
     }
   }
   if (objectHere != null) removeObject(objectHere);
@@ -623,6 +688,15 @@ function paintAtLocation(location) {
 
   if (typeof paintBrushTileCode === "number") {
     paintTileAtLocation(location, paintBrushTileCode);
+  } else if (paintBrushTileCode === "resize") {
+    var toRowcol = getRowcol(level, location);
+    var dr = toRowcol.r - resizeDragAnchorRowcol.r;
+    var dc = toRowcol.c - resizeDragAnchorRowcol.c;
+    resizeDragAnchorRowcol = toRowcol;
+    if (dr < 0) removeRow();
+    if (dr > 0) addRow();
+    if (dc < 0) removeCol();
+    if (dc > 0) addCol();
   } else if (paintBrushTileCode === "select") {
     selectionEnd = location;
   } else if (paintBrushTileCode === "paste") {
@@ -1106,6 +1180,8 @@ function render() {
         if (!(objectHere != null && objectHere.type === "block" && objectHere.color === paintBrushBlockColorIndex)) {
           drawObject(newBlock(paintBrushSnakeColorIndex, hoverLocation));
         }
+      } else if (paintBrushTileCode === "resize") {
+        void 0; // do nothing
       } else if (paintBrushTileCode === "select") {
         void 0; // do nothing
       } else if (paintBrushTileCode === "paste") {
