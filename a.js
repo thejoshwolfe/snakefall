@@ -7,49 +7,6 @@ var FRUIT = 3;
 var EXIT = 4;
 var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT];
 
-var level1 = {
-  "height": 17,
-  "width": 29,
-  "map": [
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,3,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,4,0,0,
-    0,0,3,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,1,2,2,0,0,0,0,2,2,1,1,1,2,2,0,0,0,0,2,2,1,0,0,0,0,
-    0,0,0,0,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-  ],
-  "objects": [
-    {
-      "type": "snake",
-      "color": 0,
-      "dead": false,
-      "locations": [323,322,351]
-    },
-    {
-      "type": "snake",
-      "color": 1,
-      "dead": false,
-      "locations": [43]
-    },
-    {
-      "type": "snake",
-      "color": 2,
-      "dead": false,
-      "locations": [101,102,131,160,159,158,129,100]
-    }
-  ]
-};
 var tileSize = 30;
 var level;
 var unmoveStuff = {buffer:[], cursor:0, spanId:"movesSpan", redoButtonId:"removeButton"};
@@ -66,40 +23,163 @@ function loadLevel(newLevel) {
   pushUndo(uneditStuff);
   render();
 }
-function validateLevel(level) {
-  // pass/fail coherency. can we work with it at all?
+
+
+var magicNumber = "3tFRIoTUvKlphLYY";
+var level1 = magicNumber + "&" +
+  "v0&" +
+  "17&29" +
+  "?" +
+    "00000000000000000000000000000" +
+    "00000000000000000000000000000" +
+    "00000000000011111000000000000" +
+    "00000000001110001110000000000" +
+    "00000000000000300000000000000" +
+    "00000000000000000000000000000" +
+    "00000000000000000000000000000" +
+    "00000000000000000000000000000" +
+    "00000000000000000000000000000" +
+    "00000000000000000000000000000" +
+    "00300000000000100000000000400" +
+    "00300000000000100000000000000" +
+    "00001220000221112200002210000" +
+    "00001110111111111111101110000" +
+    "00000000000000000000000000000" +
+    "00000000000000000000000000000" +
+    "00000000000000000000000000000" +
+  "/" +
+  "s0" + "?323&322&351/" +
+  "s1" + "?43/" +
+  "s2" + "?101&102&131&160&159&158&129&100/";
+function parseLevel(string) {
+  // magic number
+  var cursor = 0;
+  skipWhitespace();
+  if (string.indexOf(magicNumber) !== 0) throw new Error("not a snakefall level");
+  cursor += magicNumber.length;
+  consumeKeyword("&");
+
+  // version number
+  consumeKeyword("v");
+  var version = readInt();
+  if (version !== 0) throw parserError("expected version 0");
+  consumeKeyword("&");
+
+  var level = {
+    height: -1,
+    width: -1,
+    map: [],
+    objects: [],
+  };
+
+  // height, width
+  level.height = readInt();
+  consumeKeyword("&");
+  level.width = readInt();
 
   // map
-  if (!Array.isArray(level.map)) throw new Error("level.map must be array");
-  if (level.height * level.width !== level.map.length) throw new Error("height, width, and map.length do not jive");
-  for (var i = 0; i < level.map.length; i++) {
-    var tileCode = level.map[i];
-    if (validTileCodes.indexOf(tileCode) === -1) throw new Error("invalid tilecode: " + JSON.stringify(tileCode));
+  var mapData = readRun();
+  mapData = mapData.replace(/\s+/g, "");
+  if (level.height * level.width !== mapData.length) throw parserError("height, width, and map.length do not jive");
+  for (var i = 0; i < mapData.length; i++) {
+    var tileCode = mapData[i].charCodeAt(0) - "0".charCodeAt(0);
+    if (validTileCodes.indexOf(tileCode) === -1) throw parserError("invalid tilecode: " + JSON.stringify(mapData[i]));
+    level.map.push(tileCode);
   }
 
   // objects
-  if (!Array.isArray(level.objects)) throw new Error("level.objects must be array");
-  level.objects.forEach(function(object) {
-    if (!Array.isArray(object.locations)) throw new Error("object.locations must be array");
-    if (object.locations.length === 0) throw new Error("object.locations.length must be > 0");
-    object.locations.forEach(function(location) {
-      if (level.map[location] == null) throw new Error("invalid location: " + JSON.stringify(location));
+  skipWhitespace();
+  while (cursor < string.length) {
+    var object = {
+      type: "?",
+      color: -1,
+      dead: false,
+      locations: [],
+    };
+
+    // type
+    var typeCode = string[cursor];
+    var colorArray;
+    if      (typeCode === "s") { object.type = "snake"; colorArray = snakeColors; }
+    else if (typeCode === "b") { object.type = "block"; colorArray = blockColors; }
+    else throw parserError("expected object type code");
+    cursor += 1;
+
+    // color
+    object.color = readInt();
+    if (colorArray[object.color] == null) throw parserError("invalid color index");
+
+    // locations
+    var locationsData = readRun();
+    var locationStrings = locationsData.split("&");
+    if (locationStrings.length === 0) throw parserError("locations must be non-empty");
+    locationStrings.forEach(function(locationString) {
+      var location = parseInt(locationString);
+      if (!isTileCodeAir(level.map[location])) throw parserError("location must be air-like: " + JSON.stringify(locationString));
+      object.locations.push(location);
     });
-    switch (object.type) {
-      case "block":
-        // it's all good
-        break;
-      case "snake":
-        if (snakeColors[object.color] == null) throw new Error("invalid color: " + JSON.stringify(object.color));
-        if (typeof object.dead !== "boolean") throw new Error("invalid dead: " + JSON.stringify(object.dead));
-        break;
-      default: throw new Error("invalid object type: " + JSON.stringify(object.type));
-    }
-  });
+
+    level.objects.push(object);
+    skipWhitespace();
+  }
 
   return level;
+
+  function skipWhitespace() {
+    while (" \n\t\r".indexOf(string[cursor]) !== -1) {
+      cursor += 1;
+    }
+  }
+  function consumeKeyword(keyword) {
+    skipWhitespace();
+    if (string.indexOf(keyword, cursor) !== cursor) throw parserError("expected " + JSON.stringify(keyword));
+    cursor += 1;
+  }
+  function readInt() {
+    skipWhitespace();
+    for (var i = cursor; i < string.length; i++) {
+      if ("0123456789".indexOf(string[i]) === -1) break;
+    }
+    var substring = string.substring(cursor, i);
+    if (substring.length === 0) throw parserError("expected int");
+    cursor = i;
+    return parseInt(substring, 10);
+  }
+  function readRun() {
+    consumeKeyword("?");
+    var endIndex = string.indexOf("/", cursor);
+    var substring = string.substring(cursor, endIndex);
+    cursor = endIndex + 1;
+    return substring;
+  }
+  function parserError(message) {
+    return new Error("parse error at position " + cursor + ": " + message);
+  }
 }
 
+function stringifyLevel(level) {
+  var output = magicNumber + "&\n";
+  output += "v0&\n";
+  output += level.height + "&" + level.width + "\n";
+
+  output += "?\n";
+  for (var r = 0; r < level.height; r++) {
+    output += "  " + level.map.slice(r * level.width, (r + 1) * level.width).join("") + "\n";
+  }
+  output += "/\n";
+
+  for (var i = 0; i < level.objects.length; i++) {
+    var object = level.objects[i];
+    output += {"snake":"s", "block":"b"}[object.type] + object.color + " ";
+    output += "?" + object.locations.join("&") + "/\n";
+  }
+
+  // sanity check
+  var shouldBeTheSame = parseLevel(output);
+  if (!deepEquals(level, shouldBeTheSame)) throw asdf; // serialization/deserialization is broken
+
+  return output;
+}
 
 function deepEquals(a, b) {
   if (a == null) return b == null;
@@ -307,7 +387,7 @@ document.getElementById("serializationTextarea").addEventListener("keydown", fun
 document.getElementById("submitSerializationButton").addEventListener("click", function() {
   var string = document.getElementById("serializationTextarea").value;
   try {
-    var newLevel = validateLevel(JSON.parse(string));
+    var newLevel = parseLevel(string);
   } catch (e) {
     alert(e);
     return;
@@ -525,7 +605,7 @@ function copySelection() {
     if (object != null) addIfNotPresent(selectedObjects, object);
   });
   setClipboardData({
-    level: JSON.parse(stringifyLevel(level)),
+    level: JSON.parse(JSON.stringify(level)),
     selectedLocations: selectedLocations,
     selectedObjects: JSON.parse(JSON.stringify(selectedObjects)),
   });
@@ -658,6 +738,7 @@ function newBlock(color, location) {
   return {
     type: "block",
     color: color,
+    dead: false, // unused
     locations: [location],
   };
 }
@@ -1351,48 +1432,11 @@ function render() {
   }
 }
 
-function stringifyLevel(level) {
-  // we could just JSON.stringify, but that's kinda ugly and non-deterministic.
-  var output = '';
-  output +=     '{\n';
-  output +=     '  "height": ' + level.height + ',\n';
-  output +=     '  "width": '  + level.width  + ',\n';
-  output +=     '  "map": [\n';
-  for (var r = 0; r < level.height; r++) {
-    output +=   '    ' + level.map.slice(r * level.width, (r + 1) * level.width).join(',');
-    if (r < level.height - 1) output += ',';
-    output += '\n';
-  }
-  output +=     '  ],\n';
-  output +=     '  "objects": [\n';
-  for (var i = 0; i < level.objects.length; i++) {
-    var object = level.objects[i];
-    output +=   '    {\n';
-    output +=   '      "type": ' + JSON.stringify(object.type) + ',\n';
-    ["color", "dead"].forEach(function(key) {
-      if (!(key in object)) return;
-      output += '      ' + JSON.stringify(key) + ': ' + JSON.stringify(object[key]) + ',\n';
-    });
-    output +=   '      "locations": ' + JSON.stringify(object.locations) + '\n';
-    output +=   '    }';
-    if (i < level.objects.length - 1) output += ',';
-    output +=   '\n';
-  }
-  output +=     '  ]\n';
-  output +=     '}';
-
-  // sanity check
-  var shouldBeTheSame = JSON.parse(output);
-  if (!deepEquals(level, shouldBeTheSame)) throw asdf; // serialization is broken
-
-  return output;
-}
-
 function previewPaste(hoverR, hoverC) {
   var offsetR = hoverR - clipboardOffsetRowcol.r;
   var offsetC = hoverC - clipboardOffsetRowcol.c;
 
-  var newLevel = JSON.parse(stringifyLevel(level));
+  var newLevel = JSON.parse(JSON.stringify(level));
   var selectedLocations = [];
   var selectedObjects = [];
   clipboardData.selectedLocations.forEach(function(location) {
@@ -1462,4 +1506,4 @@ function getNaiveOrthogonalPath(a, b) {
 }
 
 loadPersistentState();
-loadLevel(validateLevel(level1));
+loadLevel(parseLevel(level1));
