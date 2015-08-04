@@ -26,7 +26,7 @@ function loadLevel(newLevel) {
 
 
 var magicNumber = "3tFRIoTUvKlphLYY";
-var level1 = magicNumber + "&" +
+var exampleLevel = magicNumber + "&" +
   "v0&" +
   "17&29" +
   "?" +
@@ -1516,5 +1516,21 @@ function getNaiveOrthogonalPath(a, b) {
   return path;
 }
 
+window.addEventListener("hashchange", function() {
+  loadFromLocationHash();
+});
+function loadFromLocationHash() {
+  if (location.hash.indexOf("#level=") !== 0) return false;
+  try {
+    var level = parseLevel(location.hash.substring("#level=".length));
+  } catch (e) {
+    alert(e);
+    return false;
+  }
+  loadLevel(level);
+  return true;
+}
 loadPersistentState();
-loadLevel(parseLevel(level1));
+if (!loadFromLocationHash()) {
+  loadLevel(parseLevel(exampleLevel));
+}
