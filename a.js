@@ -26,8 +26,7 @@ function loadLevel(newLevel) {
 
 
 var magicNumber = "3tFRIoTUvKlphLYY";
-var exampleLevel = magicNumber + "&" +
-  "v0&" +
+var exampleLevel = magicNumber + "&" + "v0" + "&" +
   "17&29" +
   "?" +
     "00000000000000000000000000000" +
@@ -158,7 +157,7 @@ function parseLevel(string) {
 }
 
 function stringifyLevel(level) {
-  var output = magicNumber + "&\n";
+  var output = magicNumber + "&";
   output += "v0&\n";
   output += level.height + "&" + level.width + "\n";
 
@@ -882,10 +881,9 @@ function paintAtLocation(location) {
 }
 
 function playtest() {
-  unmoveStuff.buffer[0] = unmoveStuff.buffer[unmoveStuff.buffer.length - 1];
-  unmoveStuff.buffer.splice(1);
-  unmoveStuff.cursor = 1;
-  undoStuffChanged(unmoveStuff);
+  unmoveStuff.buffer = [];
+  unmoveStuff.cursor = 0;
+  pushUndo(unmoveStuff);
 }
 function pushUndo(undoStuff) {
   if (undoStuff.buffer.length > 0) {
@@ -1036,8 +1034,6 @@ function move(dr, dc) {
     }
 
     if (!didAnything) break;
-    // for debugging
-    render();
   }
 
   pushUndo(unmoveStuff);
