@@ -380,9 +380,11 @@ function toggleShowEditor() {
   savePersistentState();
   showEditorChanged();
 }
-document.getElementById("serializationTextarea").addEventListener("keydown", function(event) {
-  // let things work normally
-  event.stopPropagation();
+["serializationTextarea", "shareLinkTextbox"].forEach(function(id) {
+  document.getElementById(id).addEventListener("keydown", function(event) {
+    // let things work normally
+    event.stopPropagation();
+  });
 });
 document.getElementById("submitSerializationButton").addEventListener("click", function() {
   var string = document.getElementById("serializationTextarea").value;
@@ -393,6 +395,11 @@ document.getElementById("submitSerializationButton").addEventListener("click", f
     return;
   }
   loadLevel(newLevel);
+});
+document.getElementById("shareLinkTextbox").addEventListener("focus", function() {
+  setTimeout(function() {
+    document.getElementById("shareLinkTextbox").select();
+  }, 0);
 });
 
 var paintBrushTileCode = null;
@@ -1223,7 +1230,11 @@ function render() {
   }
 
   // serialize
-  document.getElementById("serializationTextarea").value = stringifyLevel(level);
+  var serialization = stringifyLevel(level);
+  document.getElementById("serializationTextarea").value = serialization;
+  var link = location.href.substr(0, location.href.length - location.hash.length);
+  link += "#level=" + serialization.replace(/\s+/g, "");
+  document.getElementById("shareLinkTextbox").value = link;
 
   return; // this is the end of the function proper
 
