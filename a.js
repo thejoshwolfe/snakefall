@@ -270,6 +270,9 @@ document.addEventListener("keydown", function(event) {
       if (modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
       return;
 
+    case 13:  // Enter
+      if (modifierMask === 0) { playtest(); break; }
+      return;
     case 220: // backslash
       if (modifierMask === 0) { toggleShowEditor(); break; }
       return;
@@ -429,6 +432,9 @@ paintButtonIdAndTileCodes.forEach(function(pair) {
   document.getElementById(id).addEventListener("click", function() {
     setPaintBrushTileCode(tileCode);
   });
+});
+document.getElementById("playtestButton").addEventListener("click", function() {
+  playtest();
 });
 document.getElementById("uneditButton").addEventListener("click", function() {
   undo(uneditStuff);
@@ -875,6 +881,12 @@ function paintAtLocation(location) {
   }
 }
 
+function playtest() {
+  unmoveStuff.buffer[0] = unmoveStuff.buffer[unmoveStuff.buffer.length - 1];
+  unmoveStuff.buffer.splice(1);
+  unmoveStuff.cursor = 1;
+  undoStuffChanged(unmoveStuff);
+}
 function pushUndo(undoStuff) {
   if (undoStuff.buffer.length > 0) {
     // don't duplicate states
@@ -1530,6 +1542,7 @@ function loadFromLocationHash() {
   loadLevel(level);
   return true;
 }
+
 loadPersistentState();
 if (!loadFromLocationHash()) {
   loadLevel(parseLevel(exampleLevel));
