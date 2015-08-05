@@ -79,7 +79,7 @@ function parseLevel(string) {
 
   // map
   var mapData = readRun();
-  mapData = mapData.replace(/\s+/g, "");
+  mapData = decompressSerialization(mapData);
   if (level.height * level.width !== mapData.length) throw parserError("height, width, and map.length do not jive");
   for (var i = 0; i < mapData.length; i++) {
     var tileCode = mapData[i].charCodeAt(0) - "0".charCodeAt(0);
@@ -179,6 +179,46 @@ function stringifyLevel(level) {
   if (!deepEquals(level, shouldBeTheSame)) throw asdf; // serialization/deserialization is broken
 
   return output;
+}
+var base66 = "----0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+function compressSerialization(string) {
+  string = string.replace(/\s+/g, "");
+  // run-length encode several 0's in a row, etc.
+  // 2000000000000003 -> 2*A03 ("A" is 14 in base66 defined above)
+  var result = "";
+  var runStart = 0;
+  for (var i = 1; i < string.length + 1; i++) {
+    var runLength = i - runStart;
+    if (string[i] === string[runStart] && runLength < base66.length - 1) continue;
+    // end of run
+    if (runLength >= 4) {
+      // compress
+      result += "*" + base66[runLength] + string[runStart];
+    } else {
+      // literal
+      result += string.substring(runStart, i);
+    }
+    runStart = i;
+  }
+  return result;
+}
+function decompressSerialization(string) {
+  string = string.replace(/\s+/g, "");
+  var result = "";
+  for (var i = 0; i < string.length; i++) {
+    if (string[i] === "*") {
+      i += 1;
+      var runLength = base66.indexOf(string[i]);
+      i += 1;
+      var char = string[i];
+      for (var j = 0; j < runLength; j++) {
+        result += char;
+      }
+    } else {
+      result += string[i];
+    }
+  }
+  return result;
 }
 
 function deepEquals(a, b) {
@@ -1451,7 +1491,7 @@ function render() {
   var serialization = stringifyLevel(level);
   document.getElementById("serializationTextarea").value = serialization;
   var link = location.href.substring(0, location.href.length - location.hash.length);
-  link += "#level=" + serialization.replace(/\s+/g, "");
+  link += "#level=" + compressSerialization(serialization);
   document.getElementById("shareLinkTextbox").value = link;
 
   return; // this is the end of the function proper
