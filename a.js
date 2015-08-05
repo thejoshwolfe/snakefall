@@ -718,10 +718,9 @@ function removeCol() {
     level.map.splice(getLocation(level, r, c), 1);
   }
 
+  var transformLocation = makeScaleCoordinatesFunction(level.width, level.width - 1);
   level.objects.forEach(function(object) {
-    for (var i = 0; i < object.locations.length; i++) {
-      object.locations[i] = Math.floor((object.locations[i] + 1) * (level.width - 1) / level.width);
-    }
+    object.locations = object.locations.map(transformLocation);
   });
 
   level.width -= 1;
@@ -732,10 +731,9 @@ function addCol() {
     level.map.splice(getLocation(level, r, c) + 1, 0, SPACE);
   }
 
+  var transformLocation = makeScaleCoordinatesFunction(level.width, level.width + 1);
   level.objects.forEach(function(object) {
-    for (var i = 0; i < object.locations.length; i++) {
-      object.locations[i] = Math.floor(object.locations[i] * (level.width + 1) / level.width);
-    }
+    object.locations = object.locations.map(transformLocation);
   });
 
   level.width += 1;
@@ -891,10 +889,14 @@ function playtest() {
 
 function pushUndo(undoStuff) {
   // frame = [
-  //   "m0123", // map changed from 0 to 1 at location 23
-  //   "s00[1,2]0[2,3]", // snake color 0 moved from alive at [1, 2] to alive at [2, 3]
+  //   "m0123",              // map changed from 0 to 1 at location 23
+  //   "s00[1,2]0[2,3]",     // snake color 0 moved from alive at [1, 2] to alive at [2, 3]
   //   "s10[11,12]1[12,13]", // snake color 1 moved from alive at [11, 12] to dead at [12, 13]
-  //   "b10[20,30]0[]", // block color 1 was deleted from location [20, 30]
+  //   "b10[20,30]0[]",      // block color 1 was deleted from location [20, 30]
+  //   "h25,10",             // height changed from 25 to 10. all cropped tiles are guaranteed to be SPACE.
+  //   "w8,10",              // width changed from 8 to 10. this entry in the changeset indicates a change in coordinate systems.
+  //   "m2023",              // map changed from 2 to 0 at location 23 in the new coordinate system.
+  //   // "w10,9",           // there must never be more than 1 "w" change in a changeset.
   // ];
   var frame = null;
 
@@ -911,16 +913,48 @@ function pushUndo(undoStuff) {
 
   function diffStates(level1, level2) {
     var changes = [];
+
     // size
     var height = Math.min(level1.height, level2.height);
     var width = Math.min(level1.width, level2.width);
-    if (level1.height !== level2.height) throw asdf; // TODO
-    if (level1.width !== level2.width) throw asdf; // TODO
+    // if part of the level was cropped off, make sure we note how that part was different from space
+    for (var r = level2.height; r < level1.height; r++) {
+      // cropped
+      for (var c = 0; c < level1.width; c++) {
+        var location = getLocation(level1, r, c);
+        var tileCode = level1.map[location];
+        if (tileCode === SPACE) continue;
+        // use old coordinates, because we haven't pushed the resize into the diff yet
+        changes.push("m" + tileCode + SPACE + location);
+      }
+    }
+    for (var c = level2.width; c < level1.width; c++) {
+      // cropped
+      // only go to the min of the two heights, because we already covered the bottom crop strip above
+      for (var r = 0; r < height; r++) {
+        var location = getLocation(level1, r, c);
+        var tileCode = level1.map[location];
+        if (tileCode === SPACE) continue;
+        // use old coordinates, because we haven't pushed the resize into the diff yet
+        changes.push("m" + tileCode + SPACE + location);
+      }
+    }
+    if (level1.height !== level2.height) {
+      changes.push("h" + level1.height + "," + level2.height);
+    }
+    var transformLocation = identityFunction;
+    if (level1.width !== level2.width) {
+      changes.push("w" + level1.width + "," + level2.width);
+      // a width change also introduces a coordinate transform
+      transformLocation = makeScaleCoordinatesFunction(level1.width, level2.width);
+    }
+
     // map
     for (var r = 0; r < height; r++) {
       for (var c = 0; c < width; c++) {
-        var tileCode1 = level1.map[getLocation(level1, r, c)];
-        var location2 = getLocation(level2, r, c);
+        var location1 = getLocation(level1, r, c);
+        var tileCode1 = level1.map[location1];
+        var location2 = transformLocation(location1);
         var tileCode2 = level2.map[location2];
         if (tileCode1 !== tileCode2) {
           changes.push("m" + tileCode1 + tileCode2 + location2);
@@ -940,7 +974,7 @@ function pushUndo(undoStuff) {
       var object2 = level2.objects.filter(function(object) { return object.type + object.color === id; })[0];
       var dead1 = (object1 == null ? false : object1.dead) ? "1" : "0";
       var dead2 = (object2 == null ? false : object2.dead) ? "1" : "0";
-      var locations1 = JSON.stringify(object1 == null ? [] : object1.locations);
+      var locations1 = JSON.stringify(object1 == null ? [] : object1.locations.map(transformLocation));
       var locations2 = JSON.stringify(object2 == null ? [] : object2.locations);
       if (locations1 === locations2) return;
       changes.push(id + dead1 + locations1 + dead2 + locations2);
@@ -953,77 +987,133 @@ function undo(undoStuff) {
   if (undoStuff.cursor === 0) return; // already at the beginning
   undoStuff.cursor -= 1;
   var frame = undoStuff.buffer[undoStuff.cursor];
-  frame.forEach(function(change) {
-    applyChange(change, false);
-  });
+  applyChanges(frame, false);
   previousState = JSON.parse(JSON.stringify(level));
   undoStuffChanged(undoStuff);
 }
 function redo(undoStuff) {
-  // re-move. redo an unmove.
   if (undoStuff.cursor === undoStuff.buffer.length) return; // nothing to redo
   var frame = undoStuff.buffer[undoStuff.cursor];
   undoStuff.cursor += 1;
-  frame.forEach(function(change) {
-    applyChange(change, true);
-  });
+  applyChanges(frame, true);
   previousState = JSON.parse(JSON.stringify(level));
   undoStuffChanged(undoStuff);
 }
-function applyChange(change, isForwards) {
-  if (change[0] === "m") {
-    var fromTileCode = change[1].charCodeAt(0) - "0".charCodeAt(0);
-    var   toTileCode = change[2].charCodeAt(0) - "0".charCodeAt(0);
-    var location = parseInt(change.substr(3), 10);
-    if (!isForwards) {
-      var tmp = toTileCode;
-      toTileCode = fromTileCode;
-      fromTileCode = tmp;
+function applyChanges(changes, isForwards) {
+  var transformLocation = identityFunction;
+  if (isForwards) {
+    for (var i = 0; i < changes.length; i++) {
+      applyChange(changes[i]);
     }
-    if (level.map[location] !== fromTileCode) return; // conflict
-    level.map[location] = toTileCode;
-  } else if (change[0] === "s" || change[0] === "b") {
-    var type = change[0];
-    var color = change[1].charCodeAt(0) - "0".charCodeAt(0);
-    var dividerIndex = change.indexOf("]", 4) + 1;
-    var fromDead = change[2]            !== "0";
-    var   toDead = change[dividerIndex] !== "0";
-    var fromLocations = JSON.parse(change.substring(3, dividerIndex));
-    var   toLocations = JSON.parse(change.substring(dividerIndex + 1));
-    if (!isForwards) {
-      var tmp = toLocations;
-      toLocations = fromLocations;
-      fromLocations = tmp;
-      tmp = toDead;
-      toDead = fromDead;
-      fromDead = tmp;
+  } else {
+    for (var i = changes.length - 1; i >= 0; i--) {
+      applyChange(changes[i]);
     }
-    var object = findObjectOfTypeAndColor(type, color);
-    if (fromLocations.length !== 0) {
-      // should exist at this location
-      if (object == null) return; // conflict
-      if (!deepEquals(object.locations, fromLocations)) return; // conflict
-      if (object.dead !== fromDead) return; // conflict
-      // doit
-      if (toLocations.length !== 0) {
-        object.locations = toLocations;
-        object.dead = toDead;
-      } else {
-        removeObject(object);
+  }
+
+  function applyChange(change) {
+    if (change[0] === "h") {
+      // change height
+      // TODO handle conflicts
+      var dividerIndex = change.indexOf(",");
+      var fromHeight = parseInt(change.substring(1, dividerIndex), 10);
+      var   toHeight = parseInt(change.substring(dividerIndex + 1), 10);
+      if (!isForwards) {
+        var tmp = toHeight;
+        toHeight = fromHeight;
+        fromHeight = tmp;
       }
-    } else {
-      // shouldn't exist
-      if (object != null) return; // conflict
-      // doit
-      object = {
-        type: type,
-        color: color,
-        dead: toDead,
-        locations: toLocations,
-      };
-      level.objects.push(object);
-    }
-  } else throw asdf;
+      if (toHeight < fromHeight) {
+        // crop
+        level.map.splice(level.width * toHeight);
+      } else {
+        // grow
+        for (var i = 0; i < level.width * (toHeight - fromHeight); i++) {
+          level.map.push(SPACE);
+        }
+      }
+      level.height = toHeight;
+    } else if (change[0] === "w") {
+      // change width
+      // TODO handle conflicts
+      var dividerIndex = change.indexOf(",");
+      var fromWidth = parseInt(change.substring(1, dividerIndex), 10);
+      var   toWidth = parseInt(change.substring(dividerIndex + 1), 10);
+      if (!isForwards) {
+        var tmp = toWidth;
+        toWidth = fromWidth;
+        fromWidth = tmp;
+      }
+      for (var r = level.height - 1; r >= 0; r--) {
+        if (toWidth < fromWidth) {
+          // crop
+          level.map.splice(r * fromWidth + toWidth, fromWidth - toWidth);
+        } else {
+          // grow
+          for (var i = 0; i < toWidth - fromWidth; i++) {
+            level.map.splice((r + 1) * fromWidth, 0, SPACE);
+          }
+        }
+      }
+      // TODO: care about this transform
+      transformLocation = makeScaleCoordinatesFunction(fromWidth, toWidth);
+      level.width = toWidth;
+    } else if (change[0] === "m") {
+      // change map tile
+      var fromTileCode = change[1].charCodeAt(0) - "0".charCodeAt(0);
+      var   toTileCode = change[2].charCodeAt(0) - "0".charCodeAt(0);
+      var location = parseInt(change.substring(3), 10);
+      if (!isForwards) {
+        var tmp = toTileCode;
+        toTileCode = fromTileCode;
+        fromTileCode = tmp;
+      }
+      if (level.map[location] !== fromTileCode) return; // conflict
+      level.map[location] = toTileCode;
+    } else if (change[0] === "s" || change[0] === "b") {
+      // change object
+      var type = change[0];
+      var color = change[1].charCodeAt(0) - "0".charCodeAt(0);
+      var dividerIndex = change.indexOf("]", 4) + 1;
+      var fromDead = change[2]            !== "0";
+      var   toDead = change[dividerIndex] !== "0";
+      var fromLocations = JSON.parse(change.substring(3, dividerIndex));
+      var   toLocations = JSON.parse(change.substring(dividerIndex + 1));
+      if (!isForwards) {
+        var tmp = toLocations;
+        toLocations = fromLocations;
+        fromLocations = tmp;
+        tmp = toDead;
+        toDead = fromDead;
+        fromDead = tmp;
+      }
+      var object = findObjectOfTypeAndColor(type, color);
+      if (fromLocations.length !== 0) {
+        // should exist at this location
+        if (object == null) return; // conflict
+        if (!deepEquals(object.locations, fromLocations)) return; // conflict
+        if (object.dead !== fromDead) return; // conflict
+        // doit
+        if (toLocations.length !== 0) {
+          object.locations = toLocations;
+          object.dead = toDead;
+        } else {
+          removeObject(object);
+        }
+      } else {
+        // shouldn't exist
+        if (object != null) return; // conflict
+        // doit
+        object = {
+          type: type,
+          color: color,
+          dead: toDead,
+          locations: toLocations,
+        };
+        level.objects.push(object);
+      }
+    } else throw asdf;
+  }
 }
 
 function reset(undoStuff) {
@@ -1360,7 +1450,7 @@ function render() {
   // serialize
   var serialization = stringifyLevel(level);
   document.getElementById("serializationTextarea").value = serialization;
-  var link = location.href.substr(0, location.href.length - location.hash.length);
+  var link = location.href.substring(0, location.href.length - location.hash.length);
   link += "#level=" + serialization.replace(/\s+/g, "");
   document.getElementById("shareLinkTextbox").value = link;
 
@@ -1408,7 +1498,7 @@ function render() {
     }
 
     // editor hover
-    if (persistentState.showEditor && hoverLocation != null && paintBrushTileCode != null) {
+    if (persistentState.showEditor && paintBrushTileCode != null && hoverLocation != null && hoverLocation < level.map.length) {
 
       var savedContext = context;
       var buffer = document.createElement("canvas");
@@ -1642,6 +1732,14 @@ function getNaiveOrthogonalPath(a, b) {
     }
   }
   return path;
+}
+function identityFunction(x) {
+  return x;
+}
+function makeScaleCoordinatesFunction(width1, width2) {
+  return function(location) {
+    return location + (width2 - width1) * Math.floor(location / width1);
+  };
 }
 
 window.addEventListener("hashchange", function() {
