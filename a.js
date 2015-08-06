@@ -323,6 +323,9 @@ document.addEventListener("keydown", function(event) {
     case "E".charCodeAt(0):
       if (modifierMask === 0) { setPaintBrushTileCode(SPACE); break; }
       return;
+    case 46: // delete
+      if (modifierMask === 0) { setPaintBrushTileCode(SPACE); break; }
+      return;
     case "W".charCodeAt(0):
       if (!persistentState.showEditor && modifierMask === 0) { move(-1, 0); break; }
       if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(WALL); break; }
