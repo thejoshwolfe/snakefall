@@ -9,19 +9,16 @@ var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT];
 
 var tileSize = 30;
 var level;
-var unmoveStuff = {buffer:[], cursor:0, spanId:"movesSpan", redoButtonId:"removeButton"};
-var uneditStuff = {buffer:[], cursor:0, spanId:"editsSpan", redoButtonId:"reeditButton"};
-var previousState = null;
+var unmoveStuff = {undoStack:[], redoStack:[], spanId:"movesSpan", undoButtonId:"unmoveButton", redoButtonId:"removeButton"};
+var uneditStuff = {undoStack:[], redoStack:[], spanId:"editsSpan", undoButtonId:"uneditButton", redoButtonId:"reeditButton"};
 function loadLevel(newLevel) {
   level = newLevel;
 
   activateAnySnakePlease();
-  unmoveStuff.buffer = []
-  unmoveStuff.cursor = 0;
-  uneditStuff.buffer = []
-  uneditStuff.cursor = 0;
-  pushUndo(unmoveStuff);
-  pushUndo(uneditStuff);
+  unmoveStuff.undoStack = [];
+  unmoveStuff.redoStack = [];
+  uneditStuff.undoStack = [];
+  uneditStuff.redoStack = [];
   render();
 }
 
@@ -180,6 +177,11 @@ function stringifyLevel(level) {
 
   return output;
 }
+function serializeObjectState(object) {
+  if (object == null) return "0[]";
+  return (object.dead ? "1" : "0") + JSON.stringify(object.locations);
+}
+
 var base66 = "----0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 function compressSerialization(string) {
   string = string.replace(/\s+/g, "");
@@ -520,6 +522,7 @@ function refreshCheatButtonText() {
 // be careful with location vs rowcol, because this variable is used when resizing
 var lastDraggingRowcol = null;
 var hoverLocation = null;
+var draggingChangeLog = null;
 canvas.addEventListener("mousedown", function(event) {
   if (event.altKey) return;
   if (event.button !== 0) return;
@@ -529,14 +532,17 @@ canvas.addEventListener("mousedown", function(event) {
   lastDraggingRowcol = getRowcol(level, location);
   if (paintBrushTileCode === "select") selectionStart = location;
   if (paintBrushTileCode === "resize") resizeDragAnchorRowcol = lastDraggingRowcol;
-  paintAtLocation(location);
+  draggingChangeLog = [];
+  paintAtLocation(location, draggingChangeLog);
 });
 document.addEventListener("mouseup", function(event) {
   if (lastDraggingRowcol != null) {
+    // release the draggin'
     lastDraggingRowcol = null;
     paintBrushObject = null;
     resizeDragAnchorRowcol = null;
-    pushUndo(uneditStuff);
+    pushUndo(uneditStuff, draggingChangeLog);
+    draggingChangeLog = null;
   }
 });
 canvas.addEventListener("mousemove", function(event) {
@@ -552,7 +558,7 @@ canvas.addEventListener("mousemove", function(event) {
     });
     path.forEach(function(rowcol) {
       // convert to location at the last minute in case each of these steps is changing the coordinate system.
-      paintAtLocation(getLocation(level, rowcol.r, rowcol.c));
+      paintAtLocation(getLocation(level, rowcol.r, rowcol.c), draggingChangeLog);
     });
     lastDraggingRowcol = mouseRowcol;
     hoverLocation = null;
@@ -689,15 +695,16 @@ function setClipboardData(data) {
   paintBrushTileCodeChanged();
 }
 function fillSelection(tileCode) {
+  var changeLog = [];
   var locations = getSelectedLocations();
-  var objects = [];
   locations.forEach(function(location) {
-    level.map[location] = tileCode;
-    var object = findObjectAtLocation(location);
-    if (object != null) addIfNotPresent(objects, object);
+    if (level.map[location] !== tileCode) {
+      changeLog.push("m" + level.map[location] + tileCode + location);
+      level.map[location] = tileCode;
+    }
+    removeAnyObjectAtLocation(location, changeLog);
   });
-  objects.forEach(removeObject);
-  pushUndo(uneditStuff);
+  pushUndo(uneditStuff, changeLog);
 }
 function getSelectedLocations() {
   if (selectionStart == null || selectionEnd == null) return [];
@@ -736,50 +743,58 @@ function getSelectedLocations() {
   return locations;
 }
 
-function removeRow() {
-  var r = level.height - 1;
-  for (var c = 0; c < level.width; c++) {
-    var object = findObjectAtLocation(getLocation(level, r, c));
-    if (object != null) removeObject(object);
+function setHeight(newHeight, changeLog) {
+  if (newHeight < level.height) {
+    // crop
+    for (var r = newHeight; r < level.height; r++) {
+      for (var c = 0; c < level.width; c++) {
+        var location = getLocation(level, r, c);
+        removeAnyObjectAtLocation(location, changeLog);
+        // also delete non-space tiles
+        paintTileAtLocation(location, SPACE, changeLog);
+      }
+    }
+    level.map.splice(newHeight * level.width);
+  } else {
+    // expand
+    for (var r = level.height; r < newHeight; r++) {
+      for (var c = 0; c < level.width; c++) {
+        level.map.push(SPACE);
+      }
+    }
   }
-  level.map.splice(getLocation(level, r, 0));
-  level.height -= 1;
+  changeLog.push("h" + level.height + "," + newHeight);
+  level.height = newHeight;
 }
-function addRow() {
-  for (var c = 0; c < level.width; c++) {
-    level.map.push(SPACE);
-  }
-  level.height += 1;
-}
-function removeCol() {
-  var c = level.width - 1;
-  for (var r = 0; r < level.height; r++) {
-    var object = findObjectAtLocation(getLocation(level, r, c));
-    if (object != null) removeObject(object);
-  }
-  for (var r = level.height - 1; r >= 0; r--) {
-    level.map.splice(getLocation(level, r, c), 1);
+function setWidth(newWidth, changeLog) {
+  if (newWidth < level.width) {
+    // crop
+    for (var r = level.height - 1; r >= 0; r--) {
+      for (var c = level.width - 1; c >= newWidth; c--) {
+        var location = getLocation(level, r, c);
+        removeAnyObjectAtLocation(location, changeLog);
+        paintTileAtLocation(location, SPACE, changeLog);
+        level.map.splice(location, 1);
+      }
+    }
+  } else {
+    // expand
+    for (var r = level.height - 1; r >= 0; r--) {
+      var insertionPoint = level.width * (r + 1);
+      for (var c = level.width; c < newWidth; c++) {
+        // boy is this inefficient. ... YOLO!
+        level.map.splice(insertionPoint, 0, SPACE);
+      }
+    }
   }
 
-  var transformLocation = makeScaleCoordinatesFunction(level.width, level.width - 1);
+  var transformLocation = makeScaleCoordinatesFunction(level.width, newWidth);
   level.objects.forEach(function(object) {
     object.locations = object.locations.map(transformLocation);
   });
 
-  level.width -= 1;
-}
-function addCol() {
-  var c = level.width - 1;
-  for (var r = level.height - 1; r >= 0; r--) {
-    level.map.splice(getLocation(level, r, c) + 1, 0, SPACE);
-  }
-
-  var transformLocation = makeScaleCoordinatesFunction(level.width, level.width + 1);
-  level.objects.forEach(function(object) {
-    object.locations = object.locations.map(transformLocation);
-  });
-
-  level.width += 1;
+  changeLog.push("w" + level.width + "," + newWidth);
+  level.width = newWidth;
 }
 
 function newSnake(color, location) {
@@ -798,63 +813,17 @@ function newBlock(color, location) {
     locations: [location],
   };
 }
-function paintAtLocation(location) {
-  // what have we got here?
-  var objectHere = findObjectAtLocation(location);
+function paintAtLocation(location, changeLog) {
   if (typeof paintBrushTileCode === "number") {
-    if (objectHere == null && level.map[location] === paintBrushTileCode) return;
-  } else if (paintBrushTileCode === "select") {
-    // don't delete things while selecting
-    objectHere = null;
-  } else if (paintBrushTileCode === "resize") {
-    // don't delete things under the mouse while resizing
-    objectHere = null;
-  } else if (paintBrushTileCode === "paste") {
-    // we've got a different check for this
-    objectHere = null;
-  } else if (typeof paintBrushTileCode === "string") {
-    if (objectHere != null && objectHere.type === paintBrushTileCode) {
-      if (paintBrushTileCode === "s") {
-        // only ignore this paint request if we're already clicking our own head
-        if (objectHere.type === "s" && objectHere.color === paintBrushSnakeColorIndex) {
-          if (objectHere.locations[0] === location) return; // that's the head
-          // we might be self-intersecting
-          var selfIntersectionIndex = objectHere.locations.indexOf(location);
-          if (selfIntersectionIndex !== -1) {
-            // truncate from here back
-            objectHere.locations.splice(selfIntersectionIndex);
-            // ok, this object is cool.
-            objectHere = null;
-          }
-        }
-      } else if (paintBrushTileCode === "b") {
-        if (objectHere.type === "b" && objectHere.color == paintBrushBlockColorIndex) {
-          // there's special code for reclicking a block you're editing.
-          // don't blindly delete the object
-          objectHere = null;
-        }
-      } else throw asdf;
-    }
-  }
-  if (objectHere != null) removeObject(objectHere);
-
-  if (paintBrushTileCode === "s" && paintBrushObject == null) {
-    // new snake. make sure any old snake of the same color is gone.
-    var oldSnake = findSnakeOfColor(paintBrushSnakeColorIndex);
-    if (oldSnake != null) removeObject(oldSnake);
-  }
-
-  if (typeof paintBrushTileCode === "number") {
-    paintTileAtLocation(location, paintBrushTileCode);
+    removeAnyObjectAtLocation(location, changeLog);
+    paintTileAtLocation(location, paintBrushTileCode, changeLog);
   } else if (paintBrushTileCode === "resize") {
     var toRowcol = getRowcol(level, location);
     var dr = toRowcol.r - resizeDragAnchorRowcol.r;
     var dc = toRowcol.c - resizeDragAnchorRowcol.c;
     resizeDragAnchorRowcol = toRowcol;
-    if (dr < 0) removeRow();
-    if (dr > 0) addRow();
-    if (dc < 0) removeCol();
-    if (dc > 0) addCol();
+    if (dr !== 0) setHeight(level.height + dr, changeLog);
+    if (dc !== 0) setWidth(level.width + dc, changeLog);
   } else if (paintBrushTileCode === "select") {
     selectionEnd = location;
   } else if (paintBrushTileCode === "paste") {
@@ -862,76 +831,96 @@ function paintAtLocation(location) {
     var pastedData = previewPaste(hoverRowcol.r, hoverRowcol.c);
     pastedData.selectedLocations.forEach(function(location) {
       var tileCode = pastedData.level.map[location];
-      var objectHere = findObjectAtLocation(location);
-      if (objectHere != null) removeObject(objectHere);
-      paintTileAtLocation(location, tileCode);
+      removeAnyObjectAtLocation(location, changeLog);
+      paintTileAtLocation(location, tileCode, changeLog);
     });
     pastedData.selectedObjects.forEach(function(object) {
-      if (object.color != null) {
-        var otherObject = findObjectOfTypeAndColor(object.type, object.color);
-        if (otherObject != null) removeObject(otherObject);
-      }
+      // delete and recreate. could probably be just a move i guess. idk.
+      var otherObject = findObjectOfTypeAndColor(object.type, object.color);
+      if (otherObject != null) removeObject(otherObject, changeLog);
       level.objects.push(object);
+      changeLog.push(object.type + object.color + "0[]" + serializeObjectState(object));
     });
-  } else if (typeof paintBrushTileCode === "string") {
-    // make sure there's space behind us
-    level.map[location] = SPACE;
-    switch (paintBrushTileCode) {
-      case "s":
-        if (paintBrushObject == null) {
-          var thereWereNoSnakes = countSnakes() === 0;
-          paintBrushObject = newSnake(paintBrushSnakeColorIndex, location);
-          level.objects.push(paintBrushObject);
-          if (thereWereNoSnakes) activateAnySnakePlease();
-        } else {
-          // extend le snake
-          paintBrushObject.locations.unshift(location);
+  } else if (paintBrushTileCode === "s") {
+    var oldSnake = findSnakeOfColor(paintBrushSnakeColorIndex);
+    var oldSnakeSerialization = serializeObjectState(oldSnake);
+    if (oldSnake != null) {
+      if (paintBrushObject == null) {
+        // delete the old snake. there's a new snake in town.
+        removeObject(oldSnake, changeLog);
+      } else {
+        // keep dragging
+        if (paintBrushObject.locations[0] === location) return; // we just did that
+        // watch out for self-intersection
+        var selfIntersectionIndex = paintBrushObject.locations.indexOf(location);
+        if (selfIntersectionIndex !== -1) {
+          // truncate from here back
+          paintBrushObject.locations.splice(selfIntersectionIndex);
         }
-        break;
-      case "b":
-        var thisBlock = findBlockOfColor(paintBrushBlockColorIndex);
-        if (thisBlock == null) {
-          thisBlock = newBlock(paintBrushBlockColorIndex, location);
-          level.objects.push(thisBlock);
-        } else {
-          var existingIndex = thisBlock.locations.indexOf(location);
-          if (existingIndex !== -1) {
-            // reclicking part of this object means to delete just part of it.
-            if (thisBlock.locations.length === 1) {
-              removeObject(thisBlock);
-            } else {
-              thisBlock.locations.splice(existingIndex, 1);
-            }
-          } else {
-            // add a tile to the block
-            thisBlock.locations.push(location);
-          }
-        }
-        break;
-      default: throw asdf;
+      }
     }
+
+    // make sure there's space behind us
+    paintTileAtLocation(location, SPACE, changeLog);
+    if (paintBrushObject == null) {
+      var thereWereNoSnakes = countSnakes() === 0;
+      paintBrushObject = newSnake(paintBrushSnakeColorIndex, location);
+      level.objects.push(paintBrushObject);
+      if (thereWereNoSnakes) activateAnySnakePlease();
+    } else {
+      // extend le snake
+      paintBrushObject.locations.unshift(location);
+    }
+    changeLog.push(paintBrushObject.type + paintBrushObject.color + oldSnakeSerialization + serializeObjectState(paintBrushObject));
+  } else if (paintBrushTileCode === "b") {
+    // make sure there's space behind us
+    paintTileAtLocation(location, SPACE, changeLog);
+    var thisBlock = findBlockOfColor(paintBrushBlockColorIndex);
+    var oldBlockSerialization = serializeObjectState(thisBlock);
+    if (thisBlock == null) {
+      thisBlock = newBlock(paintBrushBlockColorIndex, location);
+      level.objects.push(thisBlock);
+    } else {
+      var existingIndex = thisBlock.locations.indexOf(location);
+      if (existingIndex !== -1) {
+        // reclicking part of this object means to delete just part of it.
+        if (thisBlock.locations.length === 1) {
+          removeObject(thisBlock, changeLog);
+        } else {
+          thisBlock.locations.splice(existingIndex, 1);
+        }
+      } else {
+        // add a tile to the block
+        thisBlock.locations.push(location);
+      }
+    }
+    changeLog.push(thisBlock.type + thisBlock.color + oldBlockSerialization + serializeObjectState(thisBlock));
   } else throw asdf;
   render();
+}
 
-  function paintTileAtLocation(location, tileCode) {
-    if (tileCode === EXIT) {
-      // delete any other exits
-      for (var i = 0; i < level.map.length; i++) {
-        if (level.map[i] === EXIT) level.map[i] = SPACE;
+function paintTileAtLocation(location, tileCode, changeLog) {
+  if (level.map[location] === tileCode) return;
+  if (tileCode === EXIT) {
+    // delete any other exits
+    for (var i = 0; i < level.map.length; i++) {
+      if (level.map[i] === EXIT) {
+        changeLog.push("m" + level.map[i] + SPACE + i);
+        level.map[i] = SPACE;
       }
     }
-    level.map[location] = tileCode;
   }
+  changeLog.push("m" + level.map[location] + tileCode + location);
+  level.map[location] = tileCode;
 }
 
 function playtest() {
-  unmoveStuff.buffer = [];
-  unmoveStuff.cursor = 0;
-  pushUndo(unmoveStuff);
+  unmoveStuff.undoStack = [];
+  unmoveStuff.redoStack = [];
 }
 
-function pushUndo(undoStuff) {
-  // frame = [
+function pushUndo(undoStuff, changeLog) {
+  // changeLog = [
   //   "m0123",              // map changed from 0 to 1 at location 23
   //   "s00[1,2]0[2,3]",     // snake color 0 moved from alive at [1, 2] to alive at [2, 3]
   //   "s10[11,12]1[12,13]", // snake color 1 moved from alive at [11, 12] to dead at [12, 13]
@@ -939,180 +928,72 @@ function pushUndo(undoStuff) {
   //   "h25,10",             // height changed from 25 to 10. all cropped tiles are guaranteed to be SPACE.
   //   "w8,10",              // width changed from 8 to 10. this entry in the changeset indicates a change in coordinate systems.
   //   "m2023",              // map changed from 2 to 0 at location 23 in the new coordinate system.
-  //   // "w10,9",           // there must never be more than 1 "w" change in a changeset.
   // ];
-  var frame = null;
-
-  var currentStateString = JSON.stringify(level);
-  if (previousState != null) {
-    frame = diffStates(previousState, level);
-    if (frame.length === 0) return; // don't push a do-nothing frame
-    undoStuff.buffer.splice(undoStuff.cursor);
-    undoStuff.buffer.push(frame);
-    undoStuff.cursor += 1;
-  }
-  previousState = JSON.parse(currentStateString);
+  reduceChangeLog(changeLog);
+  if (changeLog.length === 0) return;
+  undoStuff.undoStack.push(changeLog);
+  undoStuff.redoStack = [];
   undoStuffChanged(undoStuff);
-
-  function diffStates(level1, level2) {
-    var changes = [];
-
-    // size
-    var height = Math.min(level1.height, level2.height);
-    var width = Math.min(level1.width, level2.width);
-    // if part of the level was cropped off, make sure we note how that part was different from space
-    for (var r = level2.height; r < level1.height; r++) {
-      // cropped
-      for (var c = 0; c < level1.width; c++) {
-        var location = getLocation(level1, r, c);
-        var tileCode = level1.map[location];
-        if (tileCode === SPACE) continue;
-        // use old coordinates, because we haven't pushed the resize into the diff yet
-        changes.push("m" + tileCode + SPACE + location);
-      }
-    }
-    for (var c = level2.width; c < level1.width; c++) {
-      // cropped
-      // only go to the min of the two heights, because we already covered the bottom crop strip above
-      for (var r = 0; r < height; r++) {
-        var location = getLocation(level1, r, c);
-        var tileCode = level1.map[location];
-        if (tileCode === SPACE) continue;
-        // use old coordinates, because we haven't pushed the resize into the diff yet
-        changes.push("m" + tileCode + SPACE + location);
-      }
-    }
-    if (level1.height !== level2.height) {
-      changes.push("h" + level1.height + "," + level2.height);
-    }
-    var transformLocation = identityFunction;
-    if (level1.width !== level2.width) {
-      changes.push("w" + level1.width + "," + level2.width);
-      // a width change also introduces a coordinate transform
-      transformLocation = makeScaleCoordinatesFunction(level1.width, level2.width);
-    }
-
-    // map
-    for (var r = 0; r < height; r++) {
-      for (var c = 0; c < width; c++) {
-        var location1 = getLocation(level1, r, c);
-        var tileCode1 = level1.map[location1];
-        var location2 = transformLocation(location1);
-        var tileCode2 = level2.map[location2];
-        if (tileCode1 !== tileCode2) {
-          changes.push("m" + tileCode1 + tileCode2 + location2);
-        }
-      }
-    }
-    // objects
-    var objectIds = [];
-    [level1, level1].forEach(function(level) {
-      level.objects.forEach(function(object) {
-        var id = object.type + object.color;
-        addIfNotPresent(objectIds, id);
-      });
-    });
-    objectIds.forEach(function(id) {
-      var object1 = level1.objects.filter(function(object) { return object.type + object.color === id; })[0];
-      var object2 = level2.objects.filter(function(object) { return object.type + object.color === id; })[0];
-      var dead1 = (object1 == null ? false : object1.dead) ? "1" : "0";
-      var dead2 = (object2 == null ? false : object2.dead) ? "1" : "0";
-      var locations1 = JSON.stringify(object1 == null ? [] : object1.locations.map(transformLocation));
-      var locations2 = JSON.stringify(object2 == null ? [] : object2.locations);
-      if (locations1 === locations2) return;
-      changes.push(id + dead1 + locations1 + dead2 + locations2);
-    });
-    return changes;
-  }
 }
-
+function reduceChangeLog(changeLog) {
+  // TODO
+}
 function undo(undoStuff) {
-  if (undoStuff.cursor === 0) return; // already at the beginning
-  undoStuff.cursor -= 1;
-  var frame = undoStuff.buffer[undoStuff.cursor];
-  applyChanges(frame, false);
-  previousState = JSON.parse(JSON.stringify(level));
+  if (undoStuff.undoStack.length === 0) return; // already at the beginning
+  undoOneFrame(undoStuff);
   undoStuffChanged(undoStuff);
+}
+function reset(undoStuff) {
+  while (undoStuff.undoStack.length > 0) {
+    undoOneFrame(undoStuff);
+  }
+  undoStuffChanged(undoStuff);
+}
+function undoOneFrame(undoStuff) {
+  var doThis = undoStuff.undoStack.pop();
+  var redoChangeLog = [];
+  undoChanges(doThis, redoChangeLog);
+  undoStuff.redoStack.push(redoChangeLog);
 }
 function redo(undoStuff) {
-  if (undoStuff.cursor === undoStuff.buffer.length) return; // nothing to redo
-  var frame = undoStuff.buffer[undoStuff.cursor];
-  undoStuff.cursor += 1;
-  applyChanges(frame, true);
-  previousState = JSON.parse(JSON.stringify(level));
+  if (undoStuff.redoStack.length === 0) return; // already at the beginning
+  var doThis = undoStuff.redoStack.pop();
+  var undoChangeLog = [];
+  undoChanges(doThis, undoChangeLog);
+  undoStuff.undoStack.push(undoChangeLog);
   undoStuffChanged(undoStuff);
 }
-function applyChanges(changes, isForwards) {
+function undoChanges(changes, changeLog) {
   var transformLocation = identityFunction;
-  if (isForwards) {
-    for (var i = 0; i < changes.length; i++) {
-      applyChange(changes[i]);
-    }
-  } else {
-    for (var i = changes.length - 1; i >= 0; i--) {
-      applyChange(changes[i]);
-    }
+  for (var i = changes.length - 1; i >= 0; i--) {
+    undoChange(changes[i]);
   }
 
-  function applyChange(change) {
+  function undoChange(change) {
+    // note: everything here is going backwards: to -> from
     if (change[0] === "h") {
       // change height
-      // TODO handle conflicts
       var dividerIndex = change.indexOf(",");
       var fromHeight = parseInt(change.substring(1, dividerIndex), 10);
       var   toHeight = parseInt(change.substring(dividerIndex + 1), 10);
-      if (!isForwards) {
-        var tmp = toHeight;
-        toHeight = fromHeight;
-        fromHeight = tmp;
-      }
-      if (toHeight < fromHeight) {
-        // crop
-        level.map.splice(level.width * toHeight);
-      } else {
-        // grow
-        for (var i = 0; i < level.width * (toHeight - fromHeight); i++) {
-          level.map.push(SPACE);
-        }
-      }
-      level.height = toHeight;
+      if (level.height !== toHeight) return; // conflict (impossible?)
+      setHeight(fromHeight, changeLog);
     } else if (change[0] === "w") {
       // change width
-      // TODO handle conflicts
       var dividerIndex = change.indexOf(",");
       var fromWidth = parseInt(change.substring(1, dividerIndex), 10);
       var   toWidth = parseInt(change.substring(dividerIndex + 1), 10);
-      if (!isForwards) {
-        var tmp = toWidth;
-        toWidth = fromWidth;
-        fromWidth = tmp;
-      }
-      for (var r = level.height - 1; r >= 0; r--) {
-        if (toWidth < fromWidth) {
-          // crop
-          level.map.splice(r * fromWidth + toWidth, fromWidth - toWidth);
-        } else {
-          // grow
-          for (var i = 0; i < toWidth - fromWidth; i++) {
-            level.map.splice((r + 1) * fromWidth, 0, SPACE);
-          }
-        }
-      }
+      if (level.width !== toWidth) return; // conflict (impossible?)
+      setWidth(fromWidth, changeLog);
       // TODO: care about this transform
-      transformLocation = makeScaleCoordinatesFunction(fromWidth, toWidth);
-      level.width = toWidth;
+      transformLocation = makeScaleCoordinatesFunction(toWidth, fromWidth);
     } else if (change[0] === "m") {
       // change map tile
       var fromTileCode = change[1].charCodeAt(0) - "0".charCodeAt(0);
       var   toTileCode = change[2].charCodeAt(0) - "0".charCodeAt(0);
       var location = parseInt(change.substring(3), 10);
-      if (!isForwards) {
-        var tmp = toTileCode;
-        toTileCode = fromTileCode;
-        fromTileCode = tmp;
-      }
-      if (level.map[location] !== fromTileCode) return; // conflict
-      level.map[location] = toTileCode;
+      if (level.map[location] !== toTileCode) return; // conflict
+      paintTileAtLocation(location, fromTileCode, changeLog);
     } else if (change[0] === "s" || change[0] === "b") {
       // change object
       var type = change[0];
@@ -1122,26 +1003,20 @@ function applyChanges(changes, isForwards) {
       var   toDead = change[dividerIndex] !== "0";
       var fromLocations = JSON.parse(change.substring(3, dividerIndex));
       var   toLocations = JSON.parse(change.substring(dividerIndex + 1));
-      if (!isForwards) {
-        var tmp = toLocations;
-        toLocations = fromLocations;
-        fromLocations = tmp;
-        tmp = toDead;
-        toDead = fromDead;
-        fromDead = tmp;
-      }
       var object = findObjectOfTypeAndColor(type, color);
-      if (fromLocations.length !== 0) {
+      if (toLocations.length !== 0) {
         // should exist at this location
         if (object == null) return; // conflict
-        if (!deepEquals(object.locations, fromLocations)) return; // conflict
-        if (object.dead !== fromDead) return; // conflict
+        if (!deepEquals(object.locations, toLocations)) return; // conflict
+        if (object.dead !== toDead) return; // conflict
         // doit
-        if (toLocations.length !== 0) {
-          object.locations = toLocations;
-          object.dead = toDead;
+        if (fromLocations.length !== 0) {
+          var oldState = serializeObjectState(object);
+          object.locations = fromLocations;
+          object.dead = fromDead;
+          changeLog.push(object.type + object.color + oldState + serializeObjectState(object));
         } else {
-          removeObject(object);
+          removeObject(object, changeLog);
         }
       } else {
         // shouldn't exist
@@ -1150,27 +1025,21 @@ function applyChanges(changes, isForwards) {
         object = {
           type: type,
           color: color,
-          dead: toDead,
-          locations: toLocations,
+          dead: fromDead,
+          locations: fromLocations,
         };
         level.objects.push(object);
+        changeLog.push(object.type + object.color + "0[]" + serializeObjectState(object));
       }
     } else throw asdf;
   }
 }
 
-function reset(undoStuff) {
-  throw asdf; // TODO
-  undoStuff.cursor = 1;
-  level = JSON.parse(undoStuff.buffer[undoStuff.cursor - 1]);
-  undoStuffChanged(undoStuff);
-}
-
 function undoStuffChanged(undoStuff) {
-  var redoCount = undoStuff.buffer.length - undoStuff.cursor;
-  var movesText = undoStuff.cursor + "+" + redoCount;
+  var movesText = undoStuff.undoStack.length + "+" + undoStuff.redoStack.length;
   document.getElementById(undoStuff.spanId).textContent = movesText;
-  document.getElementById(undoStuff.redoButtonId).disabled = redoCount === 0;
+  document.getElementById(undoStuff.undoButtonId).disabled = undoStuff.undoStack.length === 0;
+  document.getElementById(undoStuff.redoButtonId).disabled = undoStuff.redoStack.length === 0;
 }
 
 var persistentState = {
@@ -1206,6 +1075,7 @@ function showEditorChanged() {
 
 function move(dr, dc) {
   if (!isAlive()) return;
+  var changeLog = [];
   var activeSnake = findActiveSnake();
   var headRowcol = getRowcol(level, activeSnake.locations[0]);
   var newRowcol = {r:headRowcol.r + dr, c:headRowcol.c + dc};
@@ -1219,7 +1089,7 @@ function move(dr, dc) {
     var newTile = level.map[newLocation];
     if (newTile === FRUIT) {
       // eat
-      level.map[newLocation] = SPACE;
+      paintTileAtLocation(newLocation, SPACE, changeLog);
       ate = true;
     } else if (isTileCodeAir(newTile)) {
       var otherObject = findObjectAtLocation(newLocation);
@@ -1232,12 +1102,14 @@ function move(dr, dc) {
   }
 
   // move to empty space
+  var activeSnakeOldState = serializeObjectState(activeSnake);
   activeSnake.locations.unshift(newLocation);
   if (!ate) {
     activeSnake.locations.pop();
   }
+  changeLog.push(activeSnake.type + activeSnake.color + activeSnakeOldState + serializeObjectState(activeSnake));
   // push everything, too
-  moveObjects(pushedObjects, dr, dc);
+  moveObjects(pushedObjects, dr, dc, changeLog);
 
   // gravity loop
   while (isGravity()) {
@@ -1249,7 +1121,7 @@ function move(dr, dc) {
       for (var i = 0; i < snakes.length; i++) {
         if (level.map[snakes[i].locations[0]] === EXIT) {
           // (one of) you made it!
-          removeObject(snakes[i]);
+          removeObject(snakes[i], changeLog);
           didAnything = true;
         }
       }
@@ -1271,25 +1143,27 @@ function move(dr, dc) {
       dyingObjects.forEach(function(object) {
         if (object.type === "s") {
           // look what you've done
+          var oldState = serializeObjectState(object);
           object.dead = true;
+          changeLog.push(object.type + object.color + oldState + serializeObjectState(object));
           anySnakesDied = true;
         } else {
           // a box fell off the world
-          removeObject(object);
+          removeObject(object, changeLog);
           removeFromArray(fallingObjects, object);
         }
       });
       if (anySnakesDied) break;
     }
     if (fallingObjects.length > 0) {
-      moveObjects(fallingObjects, 1, 0);
+      moveObjects(fallingObjects, 1, 0, changeLog);
       didAnything = true;
     }
 
     if (!didAnything) break;
   }
 
-  pushUndo(unmoveStuff);
+  pushUndo(unmoveStuff, changeLog);
   render();
 }
 
@@ -1365,11 +1239,13 @@ function activateAnySnakePlease() {
   activeSnakeColor = snakes[0].color;
 }
 
-function moveObjects(objects, dr, dc) {
+function moveObjects(objects, dr, dc, changeLog) {
   objects.forEach(function(object) {
+    var oldState = serializeObjectState(object);
     for (var i = 0; i < object.locations.length; i++) {
       object.locations[i] = offsetLocation(object.locations[i], dr, dc);
     }
+    changeLog.push(object.type + object.color + oldState + serializeObjectState(object));
   });
 }
 
@@ -1381,8 +1257,13 @@ function addIfNotPresent(array, element) {
   if (array.indexOf(element) !== -1) return;
   array.push(element);
 }
-function removeObject(object) {
+function removeAnyObjectAtLocation(location, changeLog) {
+  var object = findObjectAtLocation(location);
+  if (object != null) removeObject(object, changeLog);
+}
+function removeObject(object, changeLog) {
   removeFromArray(level.objects, object);
+  changeLog.push(object.type + object.color + (object.dead ? "1" : "0") + JSON.stringify(object.locations) + "0[]");
   if (object.type === "s" && object.color === activeSnakeColor) {
     activateAnySnakePlease();
   }

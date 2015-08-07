@@ -18,7 +18,7 @@ A [Snakebird](http://snakebird.noumenongames.com/) clone.
   * Resize the world.
   * Select/Cut/Copy/Paste (but not between browser tabs).
   * Cheatcodes to turn off gravity and collision detection (noclip) while editing.
-  * Level data is json text that you can copy out and paste in. No server-side saving (because there's no server at all).
+  * Level data is text that you can copy out and paste in. No server-side saving (because there's no server at all).
 
 ### TODO
 

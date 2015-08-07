@@ -6,8 +6,8 @@
         <table>
           <tr><td><input type="button" id="playtestButton" value="PLAYTEST!" title="Enter - Anchors the Restart state."></td></tr>
           <tr><td style="text-align:center;">
-            <input type="button" id="uneditButton" value="Unedit <<" title="Ctrl+Z">
-            <input type="button" id="reeditButton" value=">> Re-edit" title="Ctrl+Shift+Z, Ctrl+Y"><br>
+            <input type="button" id="uneditButton" value="Unedit <<" title="Ctrl+Z" disabled>
+            <input type="button" id="reeditButton" value=">> Re-edit" title="Ctrl+Shift+Z, Ctrl+Y" disabled><br>
             Edits: <span id="editsSpan">0+0</span>
           </td></tr>
           <tr><td><input type="button" id="resizeButton" value="Resize" title="Shift+S"></td></tr>
@@ -30,9 +30,9 @@
     <div style="text-align:center;">Controls (hover for hotkeys):<br>
       Arrows<span id="wasdSpan">/WASD</span> to move
       <input type="button" id="switchSnakesButton" value="Switch Snakes" title="Spacebar, Tab, 1 - Red, 2 - Green, 3 - Blue, 4 - Yellow"><br>
-      <input type="button" id="unmoveButton" value="Unmove <<" title="Backspace, Z, Q">
+      <input type="button" id="unmoveButton" value="Unmove <<" title="Backspace, Z, Q" disabled>
       Moves: <span id="movesSpan">0+0</span>
-      <input type="button" id="removeButton" value=">> Re-move" title="Y, Shift+Backspace, Shift+Z, Shift+Q">
+      <input type="button" id="removeButton" value=">> Re-move" title="Y, Shift+Backspace, Shift+Z, Shift+Q" disabled>
       <input type="button" id="restartButton" value="Restart" title="R">
     </div>
 
