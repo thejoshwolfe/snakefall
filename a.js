@@ -11,6 +11,7 @@ var tileSize = 30;
 var level;
 var unmoveStuff = {undoStack:[], redoStack:[], spanId:"movesSpan", undoButtonId:"unmoveButton", redoButtonId:"removeButton"};
 var uneditStuff = {undoStack:[], redoStack:[], spanId:"editsSpan", undoButtonId:"uneditButton", redoButtonId:"reeditButton"};
+var paradoxes = [];
 function loadLevel(newLevel) {
   level = newLevel;
 
@@ -106,7 +107,7 @@ function parseLevel(string) {
     if (locationStrings.length === 0) throw parserError("locations must be non-empty");
     locationStrings.forEach(function(locationString) {
       var location = parseInt(locationString);
-      if (!isTileCodeAir(level.map[location])) throw parserError("location must be air-like: " + JSON.stringify(locationString));
+      if (!(0 <= location && location < level.map.length)) throw parserError("location out of bounds: " + JSON.stringify(locationString));
       object.locations.push(location);
     });
 
@@ -928,6 +929,7 @@ function pushUndo(undoStuff, changeLog) {
   changeLog.push(level.width);
   undoStuff.undoStack.push(changeLog);
   undoStuff.redoStack = [];
+  paradoxes = [];
   undoStuffChanged(undoStuff);
 }
 function reduceChangeLog(changeLog) {
@@ -1008,10 +1010,12 @@ function reduceChangeLog(changeLog) {
 }
 function undo(undoStuff) {
   if (undoStuff.undoStack.length === 0) return; // already at the beginning
+  paradoxes = [];
   undoOneFrame(undoStuff);
   undoStuffChanged(undoStuff);
 }
 function reset(undoStuff) {
+  paradoxes = [];
   while (undoStuff.undoStack.length > 0) {
     undoOneFrame(undoStuff);
   }
@@ -1021,23 +1025,29 @@ function undoOneFrame(undoStuff) {
   var doThis = undoStuff.undoStack.pop();
   var redoChangeLog = [];
   undoChanges(doThis, redoChangeLog);
-  redoChangeLog.push(level.width);
-  undoStuff.redoStack.push(redoChangeLog);
+  if (redoChangeLog.length > 0) {
+    redoChangeLog.push(level.width);
+    undoStuff.redoStack.push(redoChangeLog);
+  }
 }
 function redo(undoStuff) {
   if (undoStuff.redoStack.length === 0) return; // already at the beginning
+  paradoxes = [];
   var doThis = undoStuff.redoStack.pop();
   var undoChangeLog = [];
   undoChanges(doThis, undoChangeLog);
-  undoChangeLog.push(level.width);
-  undoStuff.undoStack.push(undoChangeLog);
+  if (undoChangeLog.length > 0) {
+    undoChangeLog.push(level.width);
+    undoStuff.undoStack.push(undoChangeLog);
+  }
   undoStuffChanged(undoStuff);
 }
 function undoChanges(changes, changeLog) {
   var widthContext = changes.pop();
   var transformLocation = widthContext === level.width ? identityFunction : makeScaleCoordinatesFunction(widthContext, level.width);
   for (var i = changes.length - 1; i >= 0; i--) {
-    undoChange(changes[i]);
+    var paradoxDescription = undoChange(changes[i]);
+    if (paradoxDescription != null) paradoxes.push(paradoxDescription);
   }
 
   function undoChange(change) {
@@ -1046,20 +1056,21 @@ function undoChanges(changes, changeLog) {
       // change height
       var fromHeight = change[1];
       var   toHeight = change[2];
-      if (level.height !== toHeight) return; // conflict (impossible?)
+      if (level.height !== toHeight) return "Impossible";
       setHeight(fromHeight, changeLog);
     } else if (change[0] === "w") {
       // change width
       var fromWidth = change[1];
       var   toWidth = change[2];
-      if (level.width !== toWidth) return; // conflict (impossible?)
+      if (level.width !== toWidth) return "Impossible";
       setWidth(fromWidth, changeLog);
     } else if (change[0] === "m") {
       // change map tile
-      var     location = transformLocation(change[1]);
+      var location = transformLocation(change[1]);
       var fromTileCode = change[2];
       var   toTileCode = change[3];
-      if (level.map[location] !== toTileCode) return; // conflict
+      if (location >= level.map.length) return "Can't turn " + describe(toTileCode) + " into " + describe(fromTileCode) + " out of bounds";
+      if (level.map[location] !== toTileCode) return "Can't turn " + describe(toTileCode) + " into " + describe(fromTileCode) + " because there's " + describe(level.map[location]) + " there now";
       paintTileAtLocation(location, fromTileCode, changeLog);
     } else if (change[0] === "s" || change[0] === "b") {
       // change object
@@ -1070,15 +1081,14 @@ function undoChanges(changes, changeLog) {
       var fromLocations = change[2][1].map(transformLocation);
       var   toLocations = change[3][1].map(transformLocation);
       if (fromLocations.filter(function(location) { return location >= level.map.length; }).length > 0) {
-        // this would send us out of bounds.
-        return; // conflict
+        return "Can't move " + describe(type, color) + " out of bounds";
       }
       var object = findObjectOfTypeAndColor(type, color);
       if (toLocations.length !== 0) {
         // should exist at this location
-        if (object == null) return; // conflict
-        if (!deepEquals(object.locations, toLocations)) return; // conflict
-        if (object.dead !== toDead) return; // conflict
+        if (object == null) return "Can't move " + describe(type, color) + " because it doesn't exit";
+        if (!deepEquals(object.locations, toLocations)) return "Can't move " + describe(object) + " because it's in the wrong place";
+        if (object.dead !== toDead) return "Can't move " + describe(object) + " because it's alive/dead state doesn't match";
         // doit
         if (fromLocations.length !== 0) {
           var oldState = serializeObjectState(object);
@@ -1090,7 +1100,7 @@ function undoChanges(changes, changeLog) {
         }
       } else {
         // shouldn't exist
-        if (object != null) return; // conflict
+        if (object != null) return "Can't create " + describe(type, color) + " because it already exists";
         // doit
         object = {
           type: type,
@@ -1104,12 +1114,65 @@ function undoChanges(changes, changeLog) {
     } else throw asdf;
   }
 }
+function describe(arg1, arg2) {
+  // describe(0) -> "Space"
+  // describe("s", 0) -> "Snake 0 (Red)"
+  // describe(object) -> "Snake 0 (Red)"
+  // describe("b", 1) -> "Block 1"
+  if (typeof arg1 === "number") {
+    switch (arg1) {
+      case SPACE: return "Space";
+      case WALL:  return "a Wall";
+      case SPIKE: return "Spikes";
+      case FRUIT: return "Fruit";
+      case EXIT:  return "the Exit";
+      default: throw asdf;
+    }
+  }
+  if (arg1 === "s") {
+    var color = (function() {
+      switch (snakeColors[arg2]) {
+        case "#f00": return " (Red)";
+        case "#0f0": return " (Green)";
+        case "#00f": return " (Blue)";
+        case "#ff0": return " (Yellow)";
+        default: throw asdf;
+      }
+    })();
+    return "Snake " + arg2 + color;
+  }
+  if (arg1 === "b") {
+    return "Block " + arg2;
+  }
+  if (typeof arg1 === "object") return describe(arg1.type, arg1.color);
+  throw asdf;
+}
 
 function undoStuffChanged(undoStuff) {
   var movesText = undoStuff.undoStack.length + "+" + undoStuff.redoStack.length;
   document.getElementById(undoStuff.spanId).textContent = movesText;
   document.getElementById(undoStuff.undoButtonId).disabled = undoStuff.undoStack.length === 0;
   document.getElementById(undoStuff.redoButtonId).disabled = undoStuff.redoStack.length === 0;
+
+  // render paradox display
+  var uniqueParadoxes = [];
+  var paradoxCounts = [];
+  paradoxes.forEach(function(paradoxDescription) {
+    var index = uniqueParadoxes.indexOf(paradoxDescription);
+    if (index !== -1) {
+      paradoxCounts[index] += 1;
+    } else {
+      uniqueParadoxes.push(paradoxDescription);
+      paradoxCounts.push(1);
+    }
+  });
+  var paradoxDivContent = "";
+  uniqueParadoxes.forEach(function(paradox, i) {
+    if (i > 0) paradoxDivContent += "<br>\n";
+    if (paradoxCounts[i] > 1) paradoxDivContent += "(" + paradoxCounts[i] + "x) ";
+    paradoxDivContent += "Time Travel Paradox! " + uniqueParadoxes[i];
+  });
+  document.getElementById("paradoxDiv").innerHTML = paradoxDivContent;
 }
 
 var persistentState = {
