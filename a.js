@@ -928,9 +928,11 @@ function pushUndo(undoStuff, changeLog) {
   //   "h25,10",             // height changed from 25 to 10. all cropped tiles are guaranteed to be SPACE.
   //   "w8,10",              // width changed from 8 to 10. this entry in the changeset indicates a change in coordinate systems.
   //   "m2023",              // map changed from 2 to 0 at location 23 in the new coordinate system.
+  //   10,                   // the last change is always a declaration of the final width of the map.
   // ];
   reduceChangeLog(changeLog);
   if (changeLog.length === 0) return;
+  changeLog.push(level.width);
   undoStuff.undoStack.push(changeLog);
   undoStuff.redoStack = [];
   undoStuffChanged(undoStuff);
@@ -953,6 +955,7 @@ function undoOneFrame(undoStuff) {
   var doThis = undoStuff.undoStack.pop();
   var redoChangeLog = [];
   undoChanges(doThis, redoChangeLog);
+  redoChangeLog.push(level.width);
   undoStuff.redoStack.push(redoChangeLog);
 }
 function redo(undoStuff) {
@@ -960,11 +963,13 @@ function redo(undoStuff) {
   var doThis = undoStuff.redoStack.pop();
   var undoChangeLog = [];
   undoChanges(doThis, undoChangeLog);
+  undoChangeLog.push(level.width);
   undoStuff.undoStack.push(undoChangeLog);
   undoStuffChanged(undoStuff);
 }
 function undoChanges(changes, changeLog) {
-  var transformLocation = identityFunction;
+  var widthContext = changes.pop();
+  var transformLocation = widthContext === level.width ? identityFunction : makeScaleCoordinatesFunction(widthContext, level.width);
   for (var i = changes.length - 1; i >= 0; i--) {
     undoChange(changes[i]);
   }
@@ -985,13 +990,12 @@ function undoChanges(changes, changeLog) {
       var   toWidth = parseInt(change.substring(dividerIndex + 1), 10);
       if (level.width !== toWidth) return; // conflict (impossible?)
       setWidth(fromWidth, changeLog);
-      // TODO: care about this transform
-      transformLocation = makeScaleCoordinatesFunction(toWidth, fromWidth);
+      transformLocation = makeScaleCoordinatesFunction(widthContext, fromWidth);
     } else if (change[0] === "m") {
       // change map tile
       var fromTileCode = change[1].charCodeAt(0) - "0".charCodeAt(0);
       var   toTileCode = change[2].charCodeAt(0) - "0".charCodeAt(0);
-      var location = parseInt(change.substring(3), 10);
+      var location = transformLocation(parseInt(change.substring(3), 10));
       if (level.map[location] !== toTileCode) return; // conflict
       paintTileAtLocation(location, fromTileCode, changeLog);
     } else if (change[0] === "s" || change[0] === "b") {
@@ -1001,8 +1005,8 @@ function undoChanges(changes, changeLog) {
       var dividerIndex = change.indexOf("]", 4) + 1;
       var fromDead = change[2]            !== "0";
       var   toDead = change[dividerIndex] !== "0";
-      var fromLocations = JSON.parse(change.substring(3, dividerIndex));
-      var   toLocations = JSON.parse(change.substring(dividerIndex + 1));
+      var fromLocations = JSON.parse(change.substring(3, dividerIndex)).map(transformLocation);
+      var   toLocations = JSON.parse(change.substring(dividerIndex + 1)).map(transformLocation);
       var object = findObjectOfTypeAndColor(type, color);
       if (toLocations.length !== 0) {
         // should exist at this location

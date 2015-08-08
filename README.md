@@ -14,6 +14,7 @@ A [Snakebird](http://snakebird.noumenongames.com/) clone.
   * Size-1 snakes.
 * Editor:
   * Edit the game while it's running.
+    * Undo/redo edits independently of undo/redo normal movement. Can create time travel paradoxes.
   * Place and edit everything the game engine supports.
   * Resize the world.
   * Select/Cut/Copy/Paste (but not between browser tabs).
@@ -28,7 +29,6 @@ Important:
   * Enable Snakebird levels 30-38
 * Editor:
   * Detect and show errors: collision/gravity violations, no snakes or no exit, etc.
-  * Figure out how unmove and unedit should interact.
   * Stabilize level format: version numbers, upconversions.
   * Arbitrarily many snakes and blocks instead of only 4 of each.
 * Solver AI.
