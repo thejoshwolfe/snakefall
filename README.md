@@ -20,7 +20,7 @@ A [Snakebird](http://snakebird.noumenongames.com/) clone.
   * Resize the world.
   * Select/Cut/Copy/Paste (but not between browser tabs).
   * Cheatcodes to turn off gravity and collision detection (noclip) while editing.
-  * Level data is text that you can copy out and paste in. No server-side saving (because there's no server at all).
+  * Level format is human-readable text that can also be encoded in a somewhat compressed url. No server-side saving (because there's no server at all).
 
 ### TODO
 
@@ -28,8 +28,10 @@ Important:
 
 * Game Engine:
   * Enable Snakebird levels 30-38
+  * Show grid option
 * Editor:
   * Detect and show errors: collision/gravity violations, no snakes or no exit, etc.
+  * Tell the user about time travel paradoxes.
   * Stabilize level format: version numbers, upconversions.
   * Arbitrarily many snakes and blocks instead of only 4 of each.
 * Solver AI.
