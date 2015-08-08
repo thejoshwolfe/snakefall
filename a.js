@@ -1076,6 +1076,10 @@ function undoChanges(changes, changeLog) {
       var   toDead = change[3][0];
       var fromLocations = change[2][1].map(transformLocation);
       var   toLocations = change[3][1].map(transformLocation);
+      if (fromLocations.filter(function(location) { return location >= level.map.length; }).length > 0) {
+        // this would send us out of bounds.
+        return; // conflict
+      }
       var object = findObjectOfTypeAndColor(type, color);
       if (toLocations.length !== 0) {
         // should exist at this location
