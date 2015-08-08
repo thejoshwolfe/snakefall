@@ -23,8 +23,8 @@ function loadLevel(newLevel) {
 }
 
 
-var magicNumber = "3tFRIoTUvKlphLYY";
-var exampleLevel = magicNumber + "&" + "v0" + "&" +
+var magicNumber = "3tFRIoTU";
+var exampleLevel = magicNumber + "&" +
   "17&29" +
   "?" +
     "00000000000000000000000000000" +
@@ -54,12 +54,6 @@ function parseLevel(string) {
   skipWhitespace();
   if (string.indexOf(magicNumber) !== 0) throw new Error("not a snakefall level");
   cursor += magicNumber.length;
-  consumeKeyword("&");
-
-  // version number
-  consumeKeyword("v");
-  var version = readInt();
-  if (version !== 0) throw parserError("expected version 0");
   consumeKeyword("&");
 
   var level = {
@@ -156,7 +150,6 @@ function parseLevel(string) {
 
 function stringifyLevel(level) {
   var output = magicNumber + "&";
-  output += "v0&\n";
   output += level.height + "&" + level.width + "\n";
 
   output += "?\n";
