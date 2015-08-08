@@ -303,11 +303,11 @@ document.addEventListener("keydown", function(event) {
       return;
     case "R".charCodeAt(0):
       if (modifierMask === 0) { reset(unmoveStuff); break; }
-      if (modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
+      if ( persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
       return;
 
-    case 13:  // Enter
-      if (modifierMask === 0) { playtest(); break; }
+    case "P".charCodeAt(0):
+      if ( persistentState.showEditor && modifierMask === 0) { playtest(); break; }
       return;
     case 220: // backslash
       if (modifierMask === 0) { toggleShowEditor(); break; }
@@ -317,10 +317,10 @@ document.addEventListener("keydown", function(event) {
       if ( persistentState.showEditor && modifierMask === CTRL) { selectAll(); break; }
       return;
     case "E".charCodeAt(0):
-      if (modifierMask === 0) { setPaintBrushTileCode(SPACE); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(SPACE); break; }
       return;
     case 46: // delete
-      if (modifierMask === 0) { setPaintBrushTileCode(SPACE); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(SPACE); break; }
       return;
     case "W".charCodeAt(0):
       if (!persistentState.showEditor && modifierMask === 0) { move(-1, 0); break; }
@@ -332,35 +332,33 @@ document.addEventListener("keydown", function(event) {
       if ( persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("resize"); break; }
       return;
     case "X".charCodeAt(0):
-      if (modifierMask === 0) { setPaintBrushTileCode(EXIT); break; }
-      if (modifierMask === CTRL) { cutSelection(); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(EXIT); break; }
+      if ( persistentState.showEditor && modifierMask === CTRL) { cutSelection(); break; }
       return;
     case "F".charCodeAt(0):
-      if (modifierMask === 0) { setPaintBrushTileCode(FRUIT); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(FRUIT); break; }
       return;
     case "D".charCodeAt(0):
       if (!persistentState.showEditor && modifierMask === 0) { move(0, 1); break; }
       if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode("s"); break; }
       return;
     case "B".charCodeAt(0):
-      if (modifierMask === 0) { setPaintBrushTileCode("b"); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode("b"); break; }
       return;
     case "G".charCodeAt(0):
-      if (modifierMask === 0) { toggleGravity(); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { toggleGravity(); break; }
       return;
     case "C".charCodeAt(0):
-      if (modifierMask === 0) { toggleCollision(); break; }
-      if (modifierMask === CTRL) { copySelection(); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { toggleCollision(); break; }
+      if ( persistentState.showEditor && modifierMask === CTRL) { copySelection(); break; }
       return;
     case "V".charCodeAt(0):
-      if (modifierMask === CTRL) { setPaintBrushTileCode("paste"); break; }
+      if ( persistentState.showEditor && modifierMask === CTRL) { setPaintBrushTileCode("paste"); break; }
       return;
     case 32: // spacebar
     case 9:  // tab
-      if (modifierMask === 0) {
-        switchSnakes();
-        break;
-      }
+      if (modifierMask === 0)     { switchSnakes( 1); break; }
+      if (modifierMask === SHIFT) { switchSnakes(-1); break; }
       return;
     case "1".charCodeAt(0):
     case "2".charCodeAt(0):
@@ -377,10 +375,7 @@ document.addEventListener("keydown", function(event) {
       }
       return;
     case 27: // escape
-      if (modifierMask === 0) {
-        setPaintBrushTileCode(null);
-        break;
-      }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(null); break; }
       return;
     default: return;
   }
@@ -389,15 +384,19 @@ document.addEventListener("keydown", function(event) {
 });
 
 document.getElementById("switchSnakesButton").addEventListener("click", function() {
-  switchSnakes();
+  switchSnakes(1);
   render();
 });
-function switchSnakes() {
+function switchSnakes(delta) {
   if (!isAlive()) return;
-  var snakes = getSnakes();
-  for (var i = 0; i < snakes.length; i++) {
-    if (snakes[i].color !== activeSnakeColor) continue;
-    activeSnakeColor = snakes[(i + 1) % snakes.length].color;
+  var otherColors = [];
+  for (var i = 1; i < snakeColors.length; i++) {
+    otherColors.push((activeSnakeColor + i) % snakeColors.length);
+  }
+  if (delta < 0) otherColors.reverse();
+  for (var i = 0; i < otherColors.length; i++) {
+    if (findSnakeOfColor(otherColors[i]) == null) continue;
+    activeSnakeColor = otherColors[i];
     return;
   }
 }
@@ -911,6 +910,7 @@ function paintTileAtLocation(location, tileCode, changeLog) {
 function playtest() {
   unmoveStuff.undoStack = [];
   unmoveStuff.redoStack = [];
+  undoStuffChanged(unmoveStuff);
 }
 
 function pushUndo(undoStuff, changeLog) {

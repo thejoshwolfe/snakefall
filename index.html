@@ -1,10 +1,13 @@
 <html>
+  <head>
+    <title>Snakefall</title>
+  </head>
   <body>
     <table style="margin:0px auto;"><tr>
       <td><canvas id="canvas" width=750 height=600></canvas></td>
       <td id="editorPane" style="display:none;">
         <table>
-          <tr><td><input type="button" id="playtestButton" value="PLAYTEST!" title="Enter - Anchors the Restart state."></td></tr>
+          <tr><td><input type="button" id="playtestButton" value="PLAYTEST!" title="P - Anchors the Restart state."></td></tr>
           <tr><td style="text-align:center;">
             <input type="button" id="uneditButton" value="Unedit <<" title="Ctrl+Z" disabled>
             <input type="button" id="reeditButton" value=">> Re-edit" title="Ctrl+Shift+Z, Ctrl+Y" disabled><br>
@@ -29,7 +32,7 @@
     </tr></table>
     <div style="text-align:center;">Controls (hover for hotkeys):<br>
       Arrows<span id="wasdSpan">/WASD</span> to move
-      <input type="button" id="switchSnakesButton" value="Switch Snakes" title="Spacebar, Tab, 1 - Red, 2 - Green, 3 - Blue, 4 - Yellow"><br>
+      <input type="button" id="switchSnakesButton" value="Switch Snakes" title="(Shift+)Spacebar, (Shift+)Tab, 1 - Red, 2 - Green, 3 - Blue, 4 - Yellow"><br>
       <input type="button" id="unmoveButton" value="Unmove <<" title="Backspace, Z, Q" disabled>
       Moves: <span id="movesSpan">0+0</span>
       <input type="button" id="removeButton" value=">> Re-move" title="Y, Shift+Backspace, Shift+Z, Shift+Q" disabled>
