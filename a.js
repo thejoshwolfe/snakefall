@@ -5,7 +5,8 @@ var WALL = 1;
 var SPIKE = 2;
 var FRUIT = 3;
 var EXIT = 4;
-var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT];
+var PORTAL = 5;
+var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT, PORTAL];
 
 var tileSize = 30;
 var level;
@@ -312,7 +313,8 @@ document.addEventListener("keydown", function(event) {
       if (modifierMask === 0) { toggleShowEditor(); break; }
       return;
     case "A".charCodeAt(0):
-      if (!persistentState.showEditor && modifierMask === 0) { move(0, -1); break; }
+      if (!persistentState.showEditor && modifierMask === 0)    { move(0, -1); break; }
+      if ( persistentState.showEditor && modifierMask === 0)    { setPaintBrushTileCode(PORTAL); break; }
       if ( persistentState.showEditor && modifierMask === CTRL) { selectAll(); break; }
       return;
     case "E".charCodeAt(0):
@@ -460,6 +462,7 @@ var paintButtonIdAndTileCodes = [
   ["paintSpikeButton", SPIKE],
   ["paintExitButton", EXIT],
   ["paintFruitButton", FRUIT],
+  ["paintPortalButton", PORTAL],
   ["paintSnakeButton", "s"],
   ["paintBlockButton", "b"],
 ];
@@ -596,7 +599,7 @@ function setPaintBrushTileCode(tileCode) {
       selectionEnd = null;
       return;
     }
-    if (typeof tileCode === "number" && tileCode !== EXIT) {
+    if (typeof tileCode === "number" && !(tileCode === EXIT || tileCode === PORTAL)) {
       // fill in the selection
       fillSelection(tileCode);
       selectionStart = null;
@@ -1125,6 +1128,7 @@ function describe(arg1, arg2) {
       case SPIKE: return "Spikes";
       case FRUIT: return "Fruit";
       case EXIT:  return "the Exit";
+      case PORTAL:  return "a Portal";
       default: throw asdf;
     }
   }
@@ -1228,7 +1232,7 @@ function move(dr, dc) {
       if (otherObject != null) {
         if (otherObject === activeSnake) return; // can't push yourself
         // push objects
-        if (!pushOrFallOrSomething(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
+        if (!checkMovement(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
       }
     } else return; // can't go through that tile
   }
@@ -1263,7 +1267,7 @@ function move(dr, dc) {
     var dyingObjects = [];
     var fallingObjects = level.objects.filter(function(object) {
       var theseDyingObjects = [];
-      if (!pushOrFallOrSomething(null, object, 1, 0, [], theseDyingObjects)) return false;
+      if (!checkMovement(null, object, 1, 0, [], theseDyingObjects)) return false;
       // this object can fall. maybe more will fall with it too. we'll check those separately.
       theseDyingObjects.forEach(function(object) {
         addIfNotPresent(dyingObjects, object);
@@ -1299,7 +1303,7 @@ function move(dr, dc) {
   render();
 }
 
-function pushOrFallOrSomething(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects) {
+function checkMovement(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects) {
   // pusher can be null (for gravity)
   pushedObjects.push(pushedObject);
   // find forward locations
@@ -1382,7 +1386,7 @@ function moveObjects(objects, dr, dc, changeLog) {
 }
 
 function isTileCodeAir(tileCode) {
-  return tileCode === SPACE || tileCode === EXIT;
+  return tileCode === SPACE || tileCode === EXIT || tileCode === PORTAL;
 }
 
 function addIfNotPresent(array, element) {
@@ -1609,7 +1613,7 @@ function render() {
         drawSpikes(r, c);
         break;
       case FRUIT:
-        drawCircle(r, c, "#f0f");
+        drawCircle(r, c, 1, "#f0f");
         break;
       case EXIT:
         var radiusFactor = isUneatenFruit() ? 0.7 : 1.2;
@@ -1617,6 +1621,10 @@ function render() {
         drawQuarterPie(r, c, radiusFactor, "#0f0", 1);
         drawQuarterPie(r, c, radiusFactor, "#00f", 2);
         drawQuarterPie(r, c, radiusFactor, "#ff0", 3);
+        break;
+      case PORTAL:
+        drawCircle(r, c, 0.8, "#888");
+        drawCircle(r, c, 0.6, "#111");
         break;
       default: throw asdf;
     }
@@ -1638,7 +1646,7 @@ function render() {
             drawDiamond(rowcol.r, rowcol.c, color);
           } else {
             // tail segment
-            drawCircle(rowcol.r, rowcol.c, color);
+            drawCircle(rowcol.r, rowcol.c, 1, color);
             drawRect((rowcol.r + lastRowcol.r) / 2, (rowcol.c + lastRowcol.c) / 2, color);
           }
           lastRowcol = rowcol;
@@ -1705,10 +1713,10 @@ function render() {
     context.lineTo(x + tileSize/2, y);
     context.fill();
   }
-  function drawCircle(r, c, fillStyle) {
+  function drawCircle(r, c, radiusFactor, fillStyle) {
     context.fillStyle = fillStyle;
     context.beginPath();
-    context.arc((c + 0.5) * tileSize, (r + 0.5) * tileSize, tileSize/2, 0, 2*Math.PI);
+    context.arc((c + 0.5) * tileSize, (r + 0.5) * tileSize, tileSize/2 * radiusFactor, 0, 2*Math.PI);
     context.fill();
   }
   function drawRect(r, c, fillStyle) {
