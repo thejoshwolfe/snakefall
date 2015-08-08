@@ -178,8 +178,8 @@ function stringifyLevel(level) {
   return output;
 }
 function serializeObjectState(object) {
-  if (object == null) return "0[]";
-  return (object.dead ? "1" : "0") + JSON.stringify(object.locations);
+  if (object == null) return [0,[]];
+  return [object.dead, copyArray(object.locations)];
 }
 
 var base66 = "----0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -699,7 +699,7 @@ function fillSelection(tileCode) {
   var locations = getSelectedLocations();
   locations.forEach(function(location) {
     if (level.map[location] !== tileCode) {
-      changeLog.push("m" + level.map[location] + tileCode + location);
+      changeLog.push(["m", location, level.map[location], tileCode]);
       level.map[location] = tileCode;
     }
     removeAnyObjectAtLocation(location, changeLog);
@@ -763,7 +763,7 @@ function setHeight(newHeight, changeLog) {
       }
     }
   }
-  changeLog.push("h" + level.height + "," + newHeight);
+  changeLog.push(["h", level.height, newHeight]);
   level.height = newHeight;
 }
 function setWidth(newWidth, changeLog) {
@@ -793,7 +793,7 @@ function setWidth(newWidth, changeLog) {
     object.locations = object.locations.map(transformLocation);
   });
 
-  changeLog.push("w" + level.width + "," + newWidth);
+  changeLog.push(["w", level.width, newWidth]);
   level.width = newWidth;
 }
 
@@ -839,7 +839,7 @@ function paintAtLocation(location, changeLog) {
       var otherObject = findObjectOfTypeAndColor(object.type, object.color);
       if (otherObject != null) removeObject(otherObject, changeLog);
       level.objects.push(object);
-      changeLog.push(object.type + object.color + "0[]" + serializeObjectState(object));
+      changeLog.push([object.type, object.color, [0,[]], serializeObjectState(object)]);
     });
   } else if (paintBrushTileCode === "s") {
     var oldSnake = findSnakeOfColor(paintBrushSnakeColorIndex);
@@ -871,7 +871,7 @@ function paintAtLocation(location, changeLog) {
       // extend le snake
       paintBrushObject.locations.unshift(location);
     }
-    changeLog.push(paintBrushObject.type + paintBrushObject.color + oldSnakeSerialization + serializeObjectState(paintBrushObject));
+    changeLog.push([paintBrushObject.type, paintBrushObject.color, oldSnakeSerialization, serializeObjectState(paintBrushObject)]);
   } else if (paintBrushTileCode === "b") {
     // make sure there's space behind us
     paintTileAtLocation(location, SPACE, changeLog);
@@ -894,7 +894,7 @@ function paintAtLocation(location, changeLog) {
         thisBlock.locations.push(location);
       }
     }
-    changeLog.push(thisBlock.type + thisBlock.color + oldBlockSerialization + serializeObjectState(thisBlock));
+    changeLog.push([thisBlock.type, thisBlock.color, oldBlockSerialization, serializeObjectState(thisBlock)]);
   } else throw asdf;
   render();
 }
@@ -905,12 +905,12 @@ function paintTileAtLocation(location, tileCode, changeLog) {
     // delete any other exits
     for (var i = 0; i < level.map.length; i++) {
       if (level.map[i] === EXIT) {
-        changeLog.push("m" + level.map[i] + SPACE + i);
+        changeLog.push(["m", i, level.map[i], SPACE]);
         level.map[i] = SPACE;
       }
     }
   }
-  changeLog.push("m" + level.map[location] + tileCode + location);
+  changeLog.push(["m", location, level.map[location], tileCode]);
   level.map[location] = tileCode;
 }
 
@@ -921,14 +921,14 @@ function playtest() {
 
 function pushUndo(undoStuff, changeLog) {
   // changeLog = [
-  //   "m0123",              // map changed from 0 to 1 at location 23
-  //   "s00[1,2]0[2,3]",     // snake color 0 moved from alive at [1, 2] to alive at [2, 3]
-  //   "s10[11,12]1[12,13]", // snake color 1 moved from alive at [11, 12] to dead at [12, 13]
-  //   "b10[20,30]0[]",      // block color 1 was deleted from location [20, 30]
-  //   "h25,10",             // height changed from 25 to 10. all cropped tiles are guaranteed to be SPACE.
-  //   "w8,10",              // width changed from 8 to 10. this entry in the changeset indicates a change in coordinate systems.
-  //   "m2023",              // map changed from 2 to 0 at location 23 in the new coordinate system.
-  //   10,                   // the last change is always a declaration of the final width of the map.
+  //   ["m", 21, 0, 1],                              // map at location 23 changed from 0 to 1
+  //   ["s", 0, [false, [1,2]], [false, [2,3]]],     // snake color 0 moved from alive at [1, 2] to alive at [2, 3]
+  //   ["s", 1, [false, [11,12]], [true, [12,13]]],  // snake color 1 moved from alive at [11, 12] to dead at [12, 13]
+  //   ["b", 1, [false, [20,30]], [false, []]],      // block color 1 was deleted from location [20, 30]
+  //   ["h", 25, 10],                                // height changed from 25 to 10. all cropped tiles are guaranteed to be SPACE.
+  //   ["w", 8, 10],                                 // width changed from 8 to 10. a change in the coordinate system.
+  //   ["m", 23, 2, 0],                              // map at location 23 changed from 2 to 0 in the new coordinate system.
+  //   10,                                           // the last change is always a declaration of the final width of the map.
   // ];
   reduceChangeLog(changeLog);
   if (changeLog.length === 0) return;
@@ -938,7 +938,80 @@ function pushUndo(undoStuff, changeLog) {
   undoStuffChanged(undoStuff);
 }
 function reduceChangeLog(changeLog) {
-  // TODO
+  for (var i = 0; i < changeLog.length - 1; i++) {
+    var change = changeLog[i];
+    if (change[0] === "h") {
+      for (var j = i + 1; j < changeLog.length; j++) {
+        var otherChange = changeLog[j];
+        if (otherChange[0] === "h") {
+          // combine
+          change[2] = otherChange[2];
+          changeLog.splice(j, 1);
+          j--;
+          continue;
+        } else if (otherChange[0] === "w") {
+          continue; // no interaction between height and width
+        } else break; // no more reduction possible
+      }
+      if (change[1] === change[2]) {
+        // no change
+        changeLog.splice(i, 1);
+        i--;
+      }
+    } else if (change[0] === "w") {
+      for (var j = i + 1; j < changeLog.length; j++) {
+        var otherChange = changeLog[j];
+        if (otherChange[0] === "w") {
+          // combine
+          change[2] = otherChange[2];
+          changeLog.splice(j, 1);
+          j--;
+          continue;
+        } else if (otherChange[0] === "h") {
+          continue; // no interaction between height and width
+        } else break; // no more reduction possible
+      }
+      if (change[1] === change[2]) {
+        // no change
+        changeLog.splice(i, 1);
+        i--;
+      }
+    } else if (change[0] === "m") {
+      for (var j = i + 1; j < changeLog.length; j++) {
+        var otherChange = changeLog[j];
+        if (otherChange[0] === "m" && otherChange[1] === change[1]) {
+          // combine
+          change[3] = otherChange[3];
+          changeLog.splice(j, 1);
+          j--;
+        } else if (otherChange[0] === "w" || otherChange[0] === "h") {
+          break; // can't reduce accros resizes
+        }
+      }
+      if (change[2] === change[3]) {
+        // no change
+        changeLog.splice(i, 1);
+        i--;
+      }
+    } else if (change[0] === "s" || change[0] === "b") {
+      for (var j = i + 1; j < changeLog.length; j++) {
+        var otherChange = changeLog[j];
+        if (otherChange[0] === change[0] && otherChange[1] === change[1]) {
+          // combine
+          change[3] = otherChange[3];
+          changeLog.splice(j, 1);
+          j--;
+        } else if (otherChange[0] === "w" || otherChange[0] === "h") {
+          break; // can't reduce accros resizes
+        }
+      }
+      if (deepEquals(change[2], change[3])) {
+        // no change
+        changeLog.splice(i, 1);
+        i--;
+      }
+    } else throw asdf;
+  }
 }
 function undo(undoStuff) {
   if (undoStuff.undoStack.length === 0) return; // already at the beginning
@@ -978,35 +1051,31 @@ function undoChanges(changes, changeLog) {
     // note: everything here is going backwards: to -> from
     if (change[0] === "h") {
       // change height
-      var dividerIndex = change.indexOf(",");
-      var fromHeight = parseInt(change.substring(1, dividerIndex), 10);
-      var   toHeight = parseInt(change.substring(dividerIndex + 1), 10);
+      var fromHeight = change[1];
+      var   toHeight = change[2];
       if (level.height !== toHeight) return; // conflict (impossible?)
       setHeight(fromHeight, changeLog);
     } else if (change[0] === "w") {
       // change width
-      var dividerIndex = change.indexOf(",");
-      var fromWidth = parseInt(change.substring(1, dividerIndex), 10);
-      var   toWidth = parseInt(change.substring(dividerIndex + 1), 10);
+      var fromWidth = change[1];
+      var   toWidth = change[2];
       if (level.width !== toWidth) return; // conflict (impossible?)
       setWidth(fromWidth, changeLog);
-      transformLocation = makeScaleCoordinatesFunction(widthContext, fromWidth);
     } else if (change[0] === "m") {
       // change map tile
-      var fromTileCode = change[1].charCodeAt(0) - "0".charCodeAt(0);
-      var   toTileCode = change[2].charCodeAt(0) - "0".charCodeAt(0);
-      var location = transformLocation(parseInt(change.substring(3), 10));
+      var     location = transformLocation(change[1]);
+      var fromTileCode = change[2];
+      var   toTileCode = change[3];
       if (level.map[location] !== toTileCode) return; // conflict
       paintTileAtLocation(location, fromTileCode, changeLog);
     } else if (change[0] === "s" || change[0] === "b") {
       // change object
       var type = change[0];
-      var color = change[1].charCodeAt(0) - "0".charCodeAt(0);
-      var dividerIndex = change.indexOf("]", 4) + 1;
-      var fromDead = change[2]            !== "0";
-      var   toDead = change[dividerIndex] !== "0";
-      var fromLocations = JSON.parse(change.substring(3, dividerIndex)).map(transformLocation);
-      var   toLocations = JSON.parse(change.substring(dividerIndex + 1)).map(transformLocation);
+      var color = change[1];
+      var fromDead = change[2][0];
+      var   toDead = change[3][0];
+      var fromLocations = change[2][1].map(transformLocation);
+      var   toLocations = change[3][1].map(transformLocation);
       var object = findObjectOfTypeAndColor(type, color);
       if (toLocations.length !== 0) {
         // should exist at this location
@@ -1018,7 +1087,7 @@ function undoChanges(changes, changeLog) {
           var oldState = serializeObjectState(object);
           object.locations = fromLocations;
           object.dead = fromDead;
-          changeLog.push(object.type + object.color + oldState + serializeObjectState(object));
+          changeLog.push([object.type, object.color, oldState, serializeObjectState(object)]);
         } else {
           removeObject(object, changeLog);
         }
@@ -1033,7 +1102,7 @@ function undoChanges(changes, changeLog) {
           locations: fromLocations,
         };
         level.objects.push(object);
-        changeLog.push(object.type + object.color + "0[]" + serializeObjectState(object));
+        changeLog.push([object.type, object.color, [0,[]], serializeObjectState(object)]);
       }
     } else throw asdf;
   }
@@ -1111,7 +1180,7 @@ function move(dr, dc) {
   if (!ate) {
     activeSnake.locations.pop();
   }
-  changeLog.push(activeSnake.type + activeSnake.color + activeSnakeOldState + serializeObjectState(activeSnake));
+  changeLog.push([activeSnake.type, activeSnake.color, activeSnakeOldState, serializeObjectState(activeSnake)]);
   // push everything, too
   moveObjects(pushedObjects, dr, dc, changeLog);
 
@@ -1149,7 +1218,7 @@ function move(dr, dc) {
           // look what you've done
           var oldState = serializeObjectState(object);
           object.dead = true;
-          changeLog.push(object.type + object.color + oldState + serializeObjectState(object));
+          changeLog.push([object.type, object.color, oldState, serializeObjectState(object)]);
           anySnakesDied = true;
         } else {
           // a box fell off the world
@@ -1249,7 +1318,7 @@ function moveObjects(objects, dr, dc, changeLog) {
     for (var i = 0; i < object.locations.length; i++) {
       object.locations[i] = offsetLocation(object.locations[i], dr, dc);
     }
-    changeLog.push(object.type + object.color + oldState + serializeObjectState(object));
+    changeLog.push([object.type, object.color, oldState, serializeObjectState(object)]);
   });
 }
 
@@ -1267,7 +1336,7 @@ function removeAnyObjectAtLocation(location, changeLog) {
 }
 function removeObject(object, changeLog) {
   removeFromArray(level.objects, object);
-  changeLog.push(object.type + object.color + (object.dead ? "1" : "0") + JSON.stringify(object.locations) + "0[]");
+  changeLog.push([object.type, object.color, [object.dead, copyArray(object.locations)], [0,[]]]);
   if (object.type === "s" && object.color === activeSnakeColor) {
     activateAnySnakePlease();
   }
@@ -1663,6 +1732,9 @@ function getNaiveOrthogonalPath(a, b) {
 }
 function identityFunction(x) {
   return x;
+}
+function copyArray(array) {
+  return array.map(identityFunction);
 }
 function makeScaleCoordinatesFunction(width1, width2) {
   return function(location) {

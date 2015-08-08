@@ -10,6 +10,7 @@ A [Snakebird](http://snakebird.noumenongames.com/) clone.
 
 * Game Engine:
   * Everything from the original game except for the shtick in levels 30-38.
+  * Undo and redo movement. Repeatedly hitting redo after a reset will effectively show a replay.
   * A fourth snake (yellow).
   * Size-1 snakes.
 * Editor:
