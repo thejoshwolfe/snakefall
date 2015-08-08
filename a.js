@@ -1237,15 +1237,20 @@ function move(dr, dc) {
     } else return; // can't go through that tile
   }
 
-  // move to empty space
+  // slither forward
   var activeSnakeOldState = serializeObjectState(activeSnake);
   activeSnake.locations.unshift(newLocation);
   if (!ate) {
     activeSnake.locations.pop();
   }
   changeLog.push([activeSnake.type, activeSnake.color, activeSnakeOldState, serializeObjectState(activeSnake)]);
+  // did you just push your face into a portal?
+  var portalLocations = getActivePortalLocations();
+  if (portalLocations.indexOf(newLocation) !== -1) {
+    activatePortal(portalLocations, newLocation, changeLog);
+  }
   // push everything, too
-  moveObjects(pushedObjects, dr, dc, changeLog);
+  moveObjects(pushedObjects, dr, dc, portalLocations, changeLog);
 
   // gravity loop
   while (isGravity()) {
@@ -1292,7 +1297,7 @@ function move(dr, dc) {
       if (anySnakesDied) break;
     }
     if (fallingObjects.length > 0) {
-      moveObjects(fallingObjects, 1, 0, changeLog);
+      moveObjects(fallingObjects, 1, 0, portalLocations, changeLog);
       didAnything = true;
     }
 
@@ -1375,14 +1380,53 @@ function activateAnySnakePlease() {
   activeSnakeColor = snakes[0].color;
 }
 
-function moveObjects(objects, dr, dc, changeLog) {
+function moveObjects(objects, dr, dc, portalLocations, changeLog) {
   objects.forEach(function(object) {
     var oldState = serializeObjectState(object);
+    var oldPortals = getSetIntersection(portalLocations, object.locations);
     for (var i = 0; i < object.locations.length; i++) {
       object.locations[i] = offsetLocation(object.locations[i], dr, dc);
     }
     changeLog.push([object.type, object.color, oldState, serializeObjectState(object)]);
+
+    var newPortals = getSetIntersection(portalLocations, object.locations);
+    var activatingPortals = newPortals.filter(function(portalLocation) {
+      return oldPortals.indexOf(portalLocation) === -1;
+    });
+    if (activatingPortals.length === 1) {
+      // exactly one new portal we're touching. activate it
+      activatePortal(portalLocations, activatingPortals[0], changeLog);
+    }
   });
+}
+
+function activatePortal(portalLocations, portalLocation, changeLog) {
+  var otherPortalLocation = portalLocations[1 - portalLocations.indexOf(portalLocation)];
+  var portalRowcol = getRowcol(level, portalLocation);
+  var otherPortalRowcol = getRowcol(level, otherPortalLocation);
+  var delta = {r:otherPortalRowcol.r - portalRowcol.r, c:otherPortalRowcol.c - portalRowcol.c};
+
+  var object = findObjectAtLocation(portalLocation);
+  var newLocations = [];
+  for (var i = 0; i < object.locations.length; i++) {
+    var rowcol = getRowcol(level, object.locations[i]);
+    var r = rowcol.r + delta.r;
+    var c = rowcol.c + delta.c;
+    if (!isInBounds(level, r, c)) return; // out of bounds
+    newLocations.push(getLocation(level, r, c));
+  }
+
+  for (var i = 0; i < newLocations.length; i++) {
+    var location = newLocations[i];
+    if (!isTileCodeAir(level.map[location])) return; // blocked by tile
+    var otherObject = findObjectAtLocation(location);
+    if (otherObject != null && otherObject !== object) return; // blocked by object
+  }
+
+  // zappo presto!
+  var oldState = serializeObjectState(object);
+  object.locations = newLocations;
+  changeLog.push([object.type, object.color, oldState, serializeObjectState(object)]);
 }
 
 function isTileCodeAir(tileCode) {
@@ -1442,6 +1486,18 @@ function isUneatenFruit() {
     if (level.map[i] === FRUIT) return true;
   }
   return false;
+}
+function getActivePortalLocations() {
+  var portalLocations = getPortalLocations();
+  if (portalLocations.length !== 2) return []; // nice try
+  return portalLocations;
+}
+function getPortalLocations() {
+  var result = [];
+  for (var i = 0; i < level.map.length; i++) {
+    if (level.map[i] === PORTAL) result.push(i);
+  }
+  return result;
 }
 function countSnakes() {
   return getSnakes().length;
@@ -1802,6 +1858,10 @@ function identityFunction(x) {
 }
 function copyArray(array) {
   return array.map(identityFunction);
+}
+function getSetIntersection(array1, array2) {
+  if (array1.length * array2.length === 0) return [];
+  return array1.filter(function(x) { return array2.indexOf(x) !== -1; });
 }
 function makeScaleCoordinatesFunction(width1, width2) {
   return function(location) {
