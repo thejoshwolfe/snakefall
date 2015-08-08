@@ -6,6 +6,10 @@ A [Snakebird](http://snakebird.noumenongames.com/) clone.
 
 [http://wolfesoftware.com/snakefall/](http://wolfesoftware.com/snakefall/)
 
+Check out some levels I made:
+
+* [Disabilities Act](http://wolfesoftware.com/snakefall/#level=3tFRIoTU&17&29?*z0*10*11*I0111000111*K03*z0*z0*R03*701*704*003*701*E0122*002211122*00221*401110*910111*z0*M0/s0?323&322&351/s1?43/s2?101&102&131&160&159&158&129&100/)
+
 ## Status
 
 * Game Engine:
