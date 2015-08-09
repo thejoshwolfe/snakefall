@@ -19,8 +19,10 @@ function loadLevel(newLevel) {
   activateAnySnakePlease();
   unmoveStuff.undoStack = [];
   unmoveStuff.redoStack = [];
+  undoStuffChanged(unmoveStuff);
   uneditStuff.undoStack = [];
   uneditStuff.redoStack = [];
+  undoStuffChanged(uneditStuff);
   render();
 }
 
@@ -217,6 +219,10 @@ function decompressSerialization(string) {
   return result;
 }
 
+function saveToUrlBar() {
+  location.hash = "#level=" + compressSerialization(stringifyLevel(level));
+}
+
 function deepEquals(a, b) {
   if (a == null) return b == null;
   if (typeof a === "string" || typeof a === "number") return a === b;
@@ -328,9 +334,10 @@ document.addEventListener("keydown", function(event) {
       if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(WALL); break; }
       return;
     case "S".charCodeAt(0):
-      if (!persistentState.showEditor && modifierMask === 0) { move(1, 0); break; }
-      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(SPIKE); break; }
+      if (!persistentState.showEditor && modifierMask === 0)     { move(1, 0); break; }
+      if ( persistentState.showEditor && modifierMask === 0)     { setPaintBrushTileCode(SPIKE); break; }
       if ( persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("resize"); break; }
+      if ( persistentState.showEditor && modifierMask === CTRL)  { saveToUrlBar(); break; }
       return;
     case "X".charCodeAt(0):
       if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(EXIT); break; }
@@ -492,6 +499,9 @@ document.getElementById("uneditButton").addEventListener("click", function() {
 document.getElementById("reeditButton").addEventListener("click", function() {
   redo(uneditStuff);
   render();
+});
+document.getElementById("saveButton").addEventListener("click", function() {
+  saveToUrlBar();
 });
 document.getElementById("copyButton").addEventListener("click", function() {
   copySelection();
