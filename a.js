@@ -1542,6 +1542,8 @@ function render() {
   context.fillStyle = "#000";
   context.fillRect(0, 0, canvas.width, canvas.height);
 
+  var activePortalLocations = getActivePortalLocations();
+
   // normal render
   renderLevel();
 
@@ -1592,8 +1594,9 @@ function render() {
     if (onlyTheseObjects == null) {
       for (var r = 0; r < level.height; r++) {
         for (var c = 0; c < level.width; c++) {
-          var tileCode = level.map[getLocation(level, r, c)];
-          drawTile(tileCode, r, c);
+          var location = getLocation(level, r, c);
+          var tileCode = level.map[location];
+          drawTile(tileCode, r, c, location);
         }
       }
     }
@@ -1626,7 +1629,7 @@ function render() {
       var objectHere = findObjectAtLocation(hoverLocation);
       if (typeof paintBrushTileCode === "number") {
         if (level.map[hoverLocation] !== paintBrushTileCode) {
-          drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c);
+          drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c, hoverLocation);
         }
       } else if (paintBrushTileCode === "s") {
         if (!(objectHere != null && objectHere.type === "s" && objectHere.color === paintBrushSnakeColorIndex)) {
@@ -1646,7 +1649,7 @@ function render() {
         pastedData.selectedLocations.forEach(function(location) {
           var tileCode = pastedData.level.map[location];
           var rowcol = getRowcol(level, location);
-          drawTile(tileCode, rowcol.r, rowcol.c);
+          drawTile(tileCode, rowcol.r, rowcol.c, location);
         });
         pastedData.selectedObjects.forEach(drawObject);
       } else throw asdf;
@@ -1658,7 +1661,7 @@ function render() {
       context.restore();
     }
   }
-  function drawTile(tileCode, r, c) {
+  function drawTile(tileCode, r, c, location) {
     switch (tileCode) {
       case SPACE:
         break;
@@ -1681,6 +1684,7 @@ function render() {
       case PORTAL:
         drawCircle(r, c, 0.8, "#888");
         drawCircle(r, c, 0.6, "#111");
+        if (activePortalLocations.indexOf(location) !== -1) drawCircle(r, c, 0.3, "#666");
         break;
       default: throw asdf;
     }
