@@ -347,11 +347,12 @@ document.addEventListener("keydown", function(event) {
       if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode("b"); break; }
       return;
     case "G".charCodeAt(0):
-      if ( persistentState.showEditor && modifierMask === 0) { toggleGravity(); break; }
+      if (modifierMask === 0) { toggleGrid(); break; }
+      if ( persistentState.showEditor && modifierMask === SHIFT) { toggleGravity(); break; }
       return;
     case "C".charCodeAt(0):
-      if ( persistentState.showEditor && modifierMask === 0) { toggleCollision(); break; }
-      if ( persistentState.showEditor && modifierMask === CTRL) { copySelection(); break; }
+      if ( persistentState.showEditor && modifierMask === SHIFT) { toggleCollision(); break; }
+      if ( persistentState.showEditor && modifierMask === CTRL)  { copySelection();   break; }
       return;
     case "V".charCodeAt(0):
       if ( persistentState.showEditor && modifierMask === CTRL) { setPaintBrushTileCode("paste"); break; }
@@ -401,6 +402,9 @@ function switchSnakes(delta) {
     return;
   }
 }
+document.getElementById("showGridButton").addEventListener("click", function() {
+  toggleGrid();
+});
 document.getElementById("restartButton").addEventListener("click", function() {
   reset(unmoveStuff);
   render();
@@ -421,6 +425,11 @@ function toggleShowEditor() {
   persistentState.showEditor = !persistentState.showEditor;
   savePersistentState();
   showEditorChanged();
+}
+function toggleGrid() {
+  persistentState.showGrid = !persistentState.showGrid;
+  savePersistentState();
+  render();
 }
 ["serializationTextarea", "shareLinkTextbox"].forEach(function(id) {
   document.getElementById(id).addEventListener("keydown", function(event) {
@@ -1180,6 +1189,7 @@ function undoStuffChanged(undoStuff) {
 
 var persistentState = {
   showEditor: false,
+  showGrid: false,
 };
 function savePersistentState() {
   localStorage.snakefall = JSON.stringify(persistentState);
@@ -1189,6 +1199,8 @@ function loadPersistentState() {
     persistentState = JSON.parse(localStorage.snakefall);
   } catch (e) {
   }
+  persistentState.showEditor = !!persistentState.showEditor;
+  persistentState.showGrid = !!persistentState.showGrid;
   showEditorChanged();
 }
 var isGravityEnabled = true;
@@ -1542,10 +1554,18 @@ function render() {
   context.fillStyle = "#000";
   context.fillRect(0, 0, canvas.width, canvas.height);
 
+  if (persistentState.showGrid && !persistentState.showEditor) {
+    drawGrid();
+  }
+
   var activePortalLocations = getActivePortalLocations();
 
   // normal render
   renderLevel();
+
+  if (persistentState.showGrid && persistentState.showEditor) {
+    drawGrid();
+  }
 
   if (persistentState.showEditor) {
     if (paintBrushTileCode === "b") {
@@ -1571,6 +1591,9 @@ function render() {
   var link = location.href.substring(0, location.href.length - location.hash.length);
   link += "#level=" + compressSerialization(serialization);
   document.getElementById("shareLinkTextbox").value = link;
+
+  // throw this in there somewhere
+  document.getElementById("showGridButton").value = (persistentState.showGrid ? "Hide" : "Show") + " Grid";
 
   return; // this is the end of the function proper
 
@@ -1782,6 +1805,30 @@ function render() {
   function drawRect(r, c, fillStyle) {
     context.fillStyle = fillStyle;
     context.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
+  }
+
+  function drawGrid() {
+    var buffer = document.createElement("canvas");
+    buffer.width = canvas.width;
+    buffer.height = canvas.height;
+    var localContext = buffer.getContext("2d");
+
+    localContext.strokeStyle = "#888";
+    localContext.beginPath();
+    for (var r = 0; r < level.height; r++) {
+      localContext.moveTo(0, tileSize*r);
+      localContext.lineTo(tileSize*level.width, tileSize*r);
+    }
+    for (var c = 0; c < level.width; c++) {
+      localContext.moveTo(tileSize*c, 0);
+      localContext.lineTo(tileSize*c, tileSize*level.height);
+    }
+    localContext.stroke();
+
+    context.save();
+    context.globalAlpha = 0.3;
+    context.drawImage(buffer, 0, 0);
+    context.restore();
   }
 }
 

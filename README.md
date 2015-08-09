@@ -14,7 +14,7 @@ Check out some levels I made:
 ## Status
 
 * Game Engine:
-  * Everything from the original game except for the shtick in levels 30-38.
+  * Everything from the original game.
   * Undo and redo movement. Repeatedly hitting redo after a reset will effectively show a replay.
   * A fourth snake (yellow).
   * Size-1 snakes.
@@ -31,9 +31,6 @@ Check out some levels I made:
 
 Important:
 
-* Game Engine:
-  * Enable Snakebird levels 30-38
-  * Show grid option
 * Editor:
   * Detect and show errors: collision/gravity violations, no snakes or no exit, etc.
   * Stabilize level format: version numbers, upconversions.
