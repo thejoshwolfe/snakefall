@@ -25,29 +25,6 @@ Check out some levels I made:
   * Resize the world.
   * Select/Cut/Copy/Paste (but not between browser tabs).
   * Cheatcodes to turn off gravity and collision detection (noclip) while editing.
-  * Level format is human-readable text that can also be encoded in a somewhat compressed url. No server-side saving (because there's no server at all).
+  * Share levels with a url that encodes the level. No server-side saving (because there's no server at all).
 
-### TODO
-
-Important:
-
-* Editor:
-  * Detect and show errors: collision/gravity violations, no snakes or no exit, etc.
-  * Stabilize level format: version numbers, upconversions.
-  * Arbitrarily many snakes and blocks instead of only 4 of each.
-* Solver AI.
-* Level select/loading/sharing:
-  * Ability to queue up several levels and play them all in sequence.
-  * Consider encoding level data in a url to share easily.
-  * Consider server-based community hub for sharing and rating levels.
-* See also the [issue tracker](https://github.com/thejoshwolfe/snakefall/issues).
-
-Fun stuff maybe someday:
-
- * Lasers and mirrors (of course)
- * Buttons and doors (why not)
- * Actual graphics?
-   * Background decorations?
-   * Different kinds of fruit?
- * Animated movement?
- * [Curious George](http://steamcommunity.com/stats/357300/achievements) achievement (just kidding)
+See the [issue tracker](https://github.com/thejoshwolfe/snakefall/issues) for more status.
