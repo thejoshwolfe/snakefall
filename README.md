@@ -14,7 +14,7 @@ Check out some levels I made:
 ## Status
 
 * Game Engine:
-  * Everything from the original game.
+  * Everything from the original game (except that the left, right, and top border of the map are impassable).
   * Undo and redo movement. Repeatedly hitting redo after a reset will effectively show a replay.
   * A fourth snake (yellow).
   * Size-1 snakes.
