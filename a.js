@@ -1702,7 +1702,7 @@ function render() {
         drawWall(r, c, getAdjacentTiles());
         break;
       case SPIKE:
-        drawSpikes(r, c, getAdjacentTiles());
+        drawSpikes(r, c, level);
         break;
       case FRUIT:
         drawCircle(r, c, 1, "#f0f");
@@ -1793,53 +1793,29 @@ function render() {
       return tileCode == null || tileCode === WALL;
     }
   }
-  function drawSpikes(r, c, adjacentTiles) {
+  function drawSpikes(r, c) {
     var x = c * tileSize;
     var y = r * tileSize;
     context.fillStyle = "#333";
     context.beginPath();
-    context.moveTo(  x + tileSize * 0.3, y + tileSize * 0.3);
-    if (!isWall(0, -1)) {
-      context.lineTo(x + tileSize * 0.4, y + tileSize * 0.0);
-      context.lineTo(x + tileSize * 0.5, y + tileSize * 0.3);
-      context.lineTo(x + tileSize * 0.6, y + tileSize * 0.0);
-    } else {
-      context.lineTo(x + tileSize * 0.3, y + tileSize * 0.0);
-      context.lineTo(x + tileSize * 0.7, y + tileSize * 0.0);
-    }
-    context.lineTo(  x + tileSize * 0.7, y + tileSize * 0.3);
-    if (!isWall(1, 0)) {
-      context.lineTo(x + tileSize * 1.0, y + tileSize * 0.4);
-      context.lineTo(x + tileSize * 0.7, y + tileSize * 0.5);
-      context.lineTo(x + tileSize * 1.0, y + tileSize * 0.6);
-    } else {
-      context.lineTo(x + tileSize * 1.0, y + tileSize * 0.3);
-      context.lineTo(x + tileSize * 1.0, y + tileSize * 0.7);
-    }
-    context.lineTo(  x + tileSize * 0.7, y + tileSize * 0.7);
-    if (!isWall(0, 1)) {
-      context.lineTo(x + tileSize * 0.6, y + tileSize * 1.0);
-      context.lineTo(x + tileSize * 0.5, y + tileSize * 0.7);
-      context.lineTo(x + tileSize * 0.4, y + tileSize * 1.0);
-    } else {
-      context.lineTo(x + tileSize * 0.7, y + tileSize * 1.0);
-      context.lineTo(x + tileSize * 0.3, y + tileSize * 1.0);
-    }
-    context.lineTo(  x + tileSize * 0.3, y + tileSize * 0.7);
-    if (!isWall(-1, 0)) {
-      context.lineTo(x + tileSize * 0.0, y + tileSize * 0.6);
-      context.lineTo(x + tileSize * 0.3, y + tileSize * 0.5);
-      context.lineTo(x + tileSize * 0.0, y + tileSize * 0.4);
-    } else {
-      context.lineTo(x + tileSize * 0.0, y + tileSize * 0.7);
-      context.lineTo(x + tileSize * 0.0, y + tileSize * 0.3);
-    }
-    context.lineTo(  x + tileSize * 0.3, y + tileSize * 0.3);
+    context.moveTo(x + tileSize * 0.3, y + tileSize * 0.3);
+    context.lineTo(x + tileSize * 0.4, y + tileSize * 0.0);
+    context.lineTo(x + tileSize * 0.5, y + tileSize * 0.3);
+    context.lineTo(x + tileSize * 0.6, y + tileSize * 0.0);
+    context.lineTo(x + tileSize * 0.7, y + tileSize * 0.3);
+    context.lineTo(x + tileSize * 1.0, y + tileSize * 0.4);
+    context.lineTo(x + tileSize * 0.7, y + tileSize * 0.5);
+    context.lineTo(x + tileSize * 1.0, y + tileSize * 0.6);
+    context.lineTo(x + tileSize * 0.7, y + tileSize * 0.7);
+    context.lineTo(x + tileSize * 0.6, y + tileSize * 1.0);
+    context.lineTo(x + tileSize * 0.5, y + tileSize * 0.7);
+    context.lineTo(x + tileSize * 0.4, y + tileSize * 1.0);
+    context.lineTo(x + tileSize * 0.3, y + tileSize * 0.7);
+    context.lineTo(x + tileSize * 0.0, y + tileSize * 0.6);
+    context.lineTo(x + tileSize * 0.3, y + tileSize * 0.5);
+    context.lineTo(x + tileSize * 0.0, y + tileSize * 0.4);
+    context.lineTo(x + tileSize * 0.3, y + tileSize * 0.3);
     context.fill();
-    function isWall(dc, dr) {
-      var tileCode = adjacentTiles[1 + dr][1 + dc];
-      return tileCode === SPIKE || tileCode === WALL;
-    }
   }
   function drawConnector(r1, c1, r2, c2, color) {
     // either r1 and r2 or c1 and c2 must be equal
