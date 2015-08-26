@@ -101,7 +101,7 @@ function parseLevel(string) {
 
     // color
     object.color = readInt();
-    if (colorArray[object.color] == null) throw parserError("invalid color index");
+    if (colorArray[object.color % colorArray.length] == null) throw parserError("invalid color index");
 
     // locations
     var locationsData = readRun();
@@ -374,15 +374,26 @@ document.addEventListener("keydown", function(event) {
     case "3".charCodeAt(0):
     case "4".charCodeAt(0):
       var index = event.keyCode - "1".charCodeAt(0);
+      var delta;
       if (modifierMask === 0) {
-        if (isAlive()) {
-          if (findSnakeOfColor(index) != null) {
-            activeSnakeColor = index;
+        delta = 1;
+      } else if (modifierMask === SHIFT) {
+        delta = -1;
+      } else return;
+      if (isAlive()) {
+        (function() {
+          var snakes = findSnakesOfColor(index);
+          if (snakes.length === 0) return;
+          for (var i = 0; i < snakes.length; i++) {
+            if (snakes[i].color === activeSnakeColor) {
+              activeSnakeColor = snakes[(i + delta + snakes.length) % snakes.length].color;
+              return;
+            }
           }
-        }
-        break;
+          activeSnakeColor = snakes[0].color;
+        })();
       }
-      return;
+      break;
     case 27: // escape
       if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(null); break; }
       return;
@@ -398,16 +409,15 @@ document.getElementById("switchSnakesButton").addEventListener("click", function
 });
 function switchSnakes(delta) {
   if (!isAlive()) return;
-  var otherColors = [];
-  for (var i = 1; i < snakeColors.length; i++) {
-    otherColors.push((activeSnakeColor + i) % snakeColors.length);
+  var snakes = getSnakes();
+  snakes.sort(compareColor);
+  for (var i = 0; i < snakes.length; i++) {
+    if (snakes[i].color === activeSnakeColor) {
+      activeSnakeColor = snakes[(i + delta + snakes.length) % snakes.length].color;
+      return;
+    }
   }
-  if (delta < 0) otherColors.reverse();
-  for (var i = 0; i < otherColors.length; i++) {
-    if (findSnakeOfColor(otherColors[i]) == null) continue;
-    activeSnakeColor = otherColors[i];
-    return;
-  }
+  activeSnakeColor = snakes[0].color;
 }
 document.getElementById("showGridButton").addEventListener("click", function() {
   toggleGrid();
@@ -812,9 +822,14 @@ function setWidth(newWidth, changeLog) {
 }
 
 function newSnake(color, location) {
+  var snakes = findSnakesOfColor(color);
+  snakes.sort(compareColor);
+  for (var i = 0; i < snakes.length; i++) {
+    if (snakes[i].color !== i * snakeColors.length + color) break;
+  }
   return {
     type: "s",
-    color: color,
+    color: i * snakeColors.length + color,
     dead: false,
     locations: [location],
   };
@@ -856,21 +871,15 @@ function paintAtLocation(location, changeLog) {
       changeLog.push([object.type, object.color, [0,[]], serializeObjectState(object)]);
     });
   } else if (paintBrushTileCode === "s") {
-    var oldSnake = findSnakeOfColor(paintBrushSnakeColorIndex);
-    var oldSnakeSerialization = serializeObjectState(oldSnake);
-    if (oldSnake != null) {
-      if (paintBrushObject == null) {
-        // delete the old snake. there's a new snake in town.
-        removeObject(oldSnake, changeLog);
-      } else {
-        // keep dragging
-        if (paintBrushObject.locations[0] === location) return; // we just did that
-        // watch out for self-intersection
-        var selfIntersectionIndex = paintBrushObject.locations.indexOf(location);
-        if (selfIntersectionIndex !== -1) {
-          // truncate from here back
-          paintBrushObject.locations.splice(selfIntersectionIndex);
-        }
+    var oldSnakeSerialization = serializeObjectState(paintBrushObject);
+    if (paintBrushObject != null) {
+      // keep dragging
+      if (paintBrushObject.locations[0] === location) return; // we just did that
+      // watch out for self-intersection
+      var selfIntersectionIndex = paintBrushObject.locations.indexOf(location);
+      if (selfIntersectionIndex !== -1) {
+        // truncate from here back
+        paintBrushObject.locations.splice(selfIntersectionIndex);
       }
     }
 
@@ -1485,8 +1494,11 @@ function findActiveSnake() {
 function findBlockOfColor(color) {
   return findObjectOfTypeAndColor("b", color);
 }
-function findSnakeOfColor(color) {
-  return findObjectOfTypeAndColor("s", color);
+function findSnakesOfColor(color) {
+  return level.objects.filter(function(object) {
+    if (object.type !== "s") return false;
+    return object.color % snakeColors.length === color;
+  });
 }
 function findObjectOfTypeAndColor(type, color) {
   for (var i = 0; i < level.objects.length; i++) {
@@ -1750,7 +1762,7 @@ function render() {
     switch (object.type) {
       case "s":
         var lastRowcol = null
-        var color = snakeColors[object.color];
+        var color = snakeColors[object.color % snakeColors.length];
         var headRowcol;
         object.locations.forEach(function(location) {
           var rowcol = getRowcol(level, location);
@@ -1975,6 +1987,12 @@ function getNaiveOrthogonalPath(a, b) {
 }
 function identityFunction(x) {
   return x;
+}
+function compareColor(a, b) {
+  return operatorCompare(a.color, b.color);
+}
+function operatorCompare(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 function copyArray(array) {
   return array.map(identityFunction);
