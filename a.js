@@ -1640,6 +1640,7 @@ var snakeColors = [
   "#ff0",
 ];
 var blockForeground = "#800";
+var blockInside     = "#600";
 var blockBackground = "#400";
 
 var activeSnakeId = null;
@@ -1860,10 +1861,7 @@ function render() {
         }
         break;
       case "b":
-        object.locations.forEach(function(location) {
-          var rowcol = getRowcol(level, location);
-          drawRect(rowcol.r, rowcol.c, blockForeground);
-        });
+        drawBlock(object);
         break;
       default: throw asdf;
     }
@@ -1872,22 +1870,26 @@ function render() {
   function drawWall(r, c, adjacentTiles) {
     drawRect(r, c, "#844204"); // dirt
     context.fillStyle = "#282"; // grass
-    var grassSize = 0.2;
-    var complement = 1 - grassSize;
-    var grassPixels = grassSize * tileSize;
-    var complementPixels = (1 - 2 * grassSize) * tileSize;
-    if (!isWall(-1, -1)) context.fillRect((c)            * tileSize, (r)            * tileSize, grassPixels, grassPixels);
-    if (!isWall( 1, -1)) context.fillRect((c+complement) * tileSize, (r)            * tileSize, grassPixels, grassPixels);
-    if (!isWall(-1,  1)) context.fillRect((c)            * tileSize, (r+complement) * tileSize, grassPixels, grassPixels);
-    if (!isWall( 1,  1)) context.fillRect((c+complement) * tileSize, (r+complement) * tileSize, grassPixels, grassPixels);
-    if (!isWall( 0, -1)) context.fillRect((c)            * tileSize, (r)            * tileSize, tileSize, grassPixels);
-    if (!isWall( 0,  1)) context.fillRect((c)            * tileSize, (r+complement) * tileSize, tileSize, grassPixels);
-    if (!isWall(-1,  0)) context.fillRect((c)            * tileSize, (r)            * tileSize, grassPixels, tileSize);
-    if (!isWall( 1,  0)) context.fillRect((c+complement) * tileSize, (r)            * tileSize, grassPixels, tileSize);
+    drawTileOutlines(r, c, isWall);
+
     function isWall(dc, dr) {
       var tileCode = adjacentTiles[1 + dr][1 + dc];
       return tileCode == null || tileCode === WALL;
     }
+  }
+  function drawTileOutlines(r, c, isOccupied) {
+    var grassSize = 0.2;
+    var complement = 1 - grassSize;
+    var grassPixels = grassSize * tileSize;
+    var complementPixels = (1 - 2 * grassSize) * tileSize;
+    if (!isOccupied(-1, -1)) context.fillRect((c)            * tileSize, (r)            * tileSize, grassPixels, grassPixels);
+    if (!isOccupied( 1, -1)) context.fillRect((c+complement) * tileSize, (r)            * tileSize, grassPixels, grassPixels);
+    if (!isOccupied(-1,  1)) context.fillRect((c)            * tileSize, (r+complement) * tileSize, grassPixels, grassPixels);
+    if (!isOccupied( 1,  1)) context.fillRect((c+complement) * tileSize, (r+complement) * tileSize, grassPixels, grassPixels);
+    if (!isOccupied( 0, -1)) context.fillRect((c)            * tileSize, (r)            * tileSize, tileSize, grassPixels);
+    if (!isOccupied( 0,  1)) context.fillRect((c)            * tileSize, (r+complement) * tileSize, tileSize, grassPixels);
+    if (!isOccupied(-1,  0)) context.fillRect((c)            * tileSize, (r)            * tileSize, grassPixels, tileSize);
+    if (!isOccupied( 1,  0)) context.fillRect((c+complement) * tileSize, (r)            * tileSize, grassPixels, tileSize);
   }
   function drawSpikes(r, c) {
     var x = c * tileSize;
@@ -1929,6 +1931,25 @@ function render() {
     var yHi = (r2 + 0.6) * tileSize;
     context.fillStyle = color;
     context.fillRect(xLo, yLo, xHi - xLo, yHi - yLo);
+  }
+  function drawBlock(block) {
+    var rowcols = block.locations.map(function(location) {
+      return getRowcol(level, location);
+    });
+    rowcols.forEach(function(rowcol) {
+      var r = rowcol.r;
+      var c = rowcol.c;
+      drawRect(r, c, blockInside);
+      context.fillStyle = blockForeground;
+      drawTileOutlines(r, c, isAlsoThisBlock);
+      function isAlsoThisBlock(dc, dr) {
+        for (var i = 0; i < rowcols.length; i++) {
+          var rowcol = rowcols[i];
+          if (r + dr === rowcol.r && c + dc === rowcol.c) return true;
+        }
+        return false;
+      }
+    });
   }
   function drawQuarterPie(r, c, radiusFactor, fillStyle, quadrant) {
     var cx = (c + 0.5) * tileSize;
