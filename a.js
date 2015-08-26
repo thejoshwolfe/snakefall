@@ -1563,6 +1563,12 @@ function render() {
   var context = canvas.getContext("2d");
   context.fillStyle = "#88f"; // sky
   context.fillRect(0, 0, canvas.width, canvas.height);
+  // active snake halo
+  if (countSnakes() > 1) {
+    var activeSnake = findActiveSnake();
+    var activeSnakeRowcol = getRowcol(level, activeSnake.locations[0]);
+    drawCircle(activeSnakeRowcol.r, activeSnakeRowcol.c, 2, "#fff");
+  }
 
   if (persistentState.showGrid && !persistentState.showEditor) {
     drawGrid();
@@ -1750,9 +1756,6 @@ function render() {
           if (object.dead) rowcol.r += 0.5;
           if (lastRowcol == null) {
             // head
-            if (object.color === activeSnakeColor) {
-              drawRect(rowcol.r, rowcol.c, "#888");
-            }
             drawDiamond(rowcol.r, rowcol.c, color);
           } else {
             // tail segment
