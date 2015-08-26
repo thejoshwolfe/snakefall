@@ -1561,7 +1561,7 @@ function render() {
   canvas.width = tileSize * level.width;
   canvas.height = tileSize * level.height;
   var context = canvas.getContext("2d");
-  context.fillStyle = "#000";
+  context.fillStyle = "#88f"; // sky
   context.fillRect(0, 0, canvas.width, canvas.height);
 
   if (persistentState.showGrid && !persistentState.showEditor) {
@@ -1629,7 +1629,7 @@ function render() {
         for (var c = 0; c < level.width; c++) {
           var location = getLocation(level, r, c);
           var tileCode = level.map[location];
-          drawTile(tileCode, r, c, location);
+          drawTile(tileCode, r, c, level, location);
         }
       }
     }
@@ -1662,7 +1662,7 @@ function render() {
       var objectHere = findObjectAtLocation(hoverLocation);
       if (typeof paintBrushTileCode === "number") {
         if (level.map[hoverLocation] !== paintBrushTileCode) {
-          drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c, hoverLocation);
+          drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c, level, hoverLocation);
         }
       } else if (paintBrushTileCode === "s") {
         if (!(objectHere != null && objectHere.type === "s" && objectHere.color === paintBrushSnakeColorIndex)) {
@@ -1682,7 +1682,7 @@ function render() {
         pastedData.selectedLocations.forEach(function(location) {
           var tileCode = pastedData.level.map[location];
           var rowcol = getRowcol(level, location);
-          drawTile(tileCode, rowcol.r, rowcol.c, location);
+          drawTile(tileCode, rowcol.r, rowcol.c, pastedData.level, location);
         });
         pastedData.selectedObjects.forEach(drawObject);
       } else throw asdf;
@@ -1694,15 +1694,15 @@ function render() {
       context.restore();
     }
   }
-  function drawTile(tileCode, r, c, location) {
+  function drawTile(tileCode, r, c, level, location) {
     switch (tileCode) {
       case SPACE:
         break;
       case WALL:
-        drawRect(r, c, "#fff");
+        drawWall(r, c, getAdjacentTiles());
         break;
       case SPIKE:
-        drawSpikes(r, c);
+        drawSpikes(r, c, level);
         break;
       case FRUIT:
         drawCircle(r, c, 1, "#f0f");
@@ -1720,6 +1720,23 @@ function render() {
         if (activePortalLocations.indexOf(location) !== -1) drawCircle(r, c, 0.3, "#666");
         break;
       default: throw asdf;
+    }
+    function getAdjacentTiles() {
+      return [
+        [getTile(r - 1, c - 1),
+         getTile(r - 1, c + 0),
+         getTile(r - 1, c + 1)],
+        [getTile(r + 0, c - 1),
+         null,
+         getTile(r + 0, c + 1)],
+        [getTile(r + 1, c - 1),
+         getTile(r + 1, c + 0),
+         getTile(r + 1, c + 1)],
+      ];
+    }
+    function getTile(r, c) {
+      if (!isInBounds(level, r, c)) return null;
+      return level.map[getLocation(level, r, c)];
     }
   }
 
@@ -1756,16 +1773,48 @@ function render() {
     }
   }
 
+  function drawWall(r, c, adjacentTiles) {
+    drawRect(r, c, "#844204"); // dirt
+    context.fillStyle = "#282"; // grass
+    var grassSize = 0.2;
+    var complement = 1 - grassSize;
+    var grassPixels = grassSize * tileSize;
+    var complementPixels = (1 - 2 * grassSize) * tileSize;
+    if (!isWall(-1, -1)) context.fillRect((c)            * tileSize, (r)            * tileSize, grassPixels, grassPixels);
+    if (!isWall( 1, -1)) context.fillRect((c+complement) * tileSize, (r)            * tileSize, grassPixels, grassPixels);
+    if (!isWall(-1,  1)) context.fillRect((c)            * tileSize, (r+complement) * tileSize, grassPixels, grassPixels);
+    if (!isWall( 1,  1)) context.fillRect((c+complement) * tileSize, (r+complement) * tileSize, grassPixels, grassPixels);
+    if (!isWall( 0, -1)) context.fillRect((c)            * tileSize, (r)            * tileSize, tileSize, grassPixels);
+    if (!isWall( 0,  1)) context.fillRect((c)            * tileSize, (r+complement) * tileSize, tileSize, grassPixels);
+    if (!isWall(-1,  0)) context.fillRect((c)            * tileSize, (r)            * tileSize, grassPixels, tileSize);
+    if (!isWall( 1,  0)) context.fillRect((c+complement) * tileSize, (r)            * tileSize, grassPixels, tileSize);
+    function isWall(dc, dr) {
+      var tileCode = adjacentTiles[1 + dr][1 + dc];
+      return tileCode == null || tileCode === WALL;
+    }
+  }
   function drawSpikes(r, c) {
     var x = c * tileSize;
     var y = r * tileSize;
-    context.fillStyle = "#888";
+    context.fillStyle = "#333";
     context.beginPath();
-    context.moveTo(x, y + tileSize);
-    context.lineTo(x + tileSize * 0.25, y);
-    context.lineTo(x + tileSize * 0.5, y + tileSize);
-    context.lineTo(x + tileSize * 0.75, y);
-    context.lineTo(x + tileSize, y + tileSize);
+    context.moveTo(x + tileSize * 0.3, y + tileSize * 0.3);
+    context.lineTo(x + tileSize * 0.4, y + tileSize * 0.0);
+    context.lineTo(x + tileSize * 0.5, y + tileSize * 0.3);
+    context.lineTo(x + tileSize * 0.6, y + tileSize * 0.0);
+    context.lineTo(x + tileSize * 0.7, y + tileSize * 0.3);
+    context.lineTo(x + tileSize * 1.0, y + tileSize * 0.4);
+    context.lineTo(x + tileSize * 0.7, y + tileSize * 0.5);
+    context.lineTo(x + tileSize * 1.0, y + tileSize * 0.6);
+    context.lineTo(x + tileSize * 0.7, y + tileSize * 0.7);
+    context.lineTo(x + tileSize * 0.6, y + tileSize * 1.0);
+    context.lineTo(x + tileSize * 0.5, y + tileSize * 0.7);
+    context.lineTo(x + tileSize * 0.4, y + tileSize * 1.0);
+    context.lineTo(x + tileSize * 0.3, y + tileSize * 0.7);
+    context.lineTo(x + tileSize * 0.0, y + tileSize * 0.6);
+    context.lineTo(x + tileSize * 0.3, y + tileSize * 0.5);
+    context.lineTo(x + tileSize * 0.0, y + tileSize * 0.4);
+    context.lineTo(x + tileSize * 0.3, y + tileSize * 0.3);
     context.fill();
   }
   function drawConnector(r1, c1, r2, c2, color) {
