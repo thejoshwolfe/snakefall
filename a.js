@@ -86,7 +86,7 @@ function parseLevel(string) {
   while (cursor < string.length) {
     var object = {
       type: "?",
-      color: -1,
+      id: -1,
       dead: false,
       locations: [],
     };
@@ -95,13 +95,13 @@ function parseLevel(string) {
     object.type = string[cursor];
     var colorArray;
     if      (object.type === "s") { colorArray = snakeColors; }
-    else if (object.type === "b") { colorArray = null; }
+    else if (object.type === "b") { colorArray = [1]; }
     else throw parserError("expected object type code");
     cursor += 1;
 
-    // color
-    object.color = readInt();
-    if (colorArray != null && colorArray[object.color % colorArray.length] == null) throw parserError("invalid color index");
+    // id
+    object.id = readInt();
+    if (colorArray[object.id % colorArray.length] == null) throw parserError("invalid id");
 
     // locations
     var locationsData = readRun();
@@ -163,7 +163,7 @@ function stringifyLevel(level) {
 
   for (var i = 0; i < level.objects.length; i++) {
     var object = level.objects[i];
-    output += object.type + object.color + " ";
+    output += object.type + object.id + " ";
     output += "?" + object.locations.join("&") + "/\n";
   }
 
@@ -385,12 +385,12 @@ document.addEventListener("keydown", function(event) {
           var snakes = findSnakesOfColor(index);
           if (snakes.length === 0) return;
           for (var i = 0; i < snakes.length; i++) {
-            if (snakes[i].color === activeSnakeColor) {
-              activeSnakeColor = snakes[(i + delta + snakes.length) % snakes.length].color;
+            if (snakes[i].id === activeSnakeId) {
+              activeSnakeId = snakes[(i + delta + snakes.length) % snakes.length].id;
               return;
             }
           }
-          activeSnakeColor = snakes[0].color;
+          activeSnakeId = snakes[0].id;
         })();
       }
       break;
@@ -412,12 +412,12 @@ function switchSnakes(delta) {
   var snakes = getSnakes();
   snakes.sort(compareColor);
   for (var i = 0; i < snakes.length; i++) {
-    if (snakes[i].color === activeSnakeColor) {
-      activeSnakeColor = snakes[(i + delta + snakes.length) % snakes.length].color;
+    if (snakes[i].id === activeSnakeId) {
+      activeSnakeId = snakes[(i + delta + snakes.length) % snakes.length].id;
       return;
     }
   }
-  activeSnakeColor = snakes[0].color;
+  activeSnakeId = snakes[0].id;
 }
 document.getElementById("showGridButton").addEventListener("click", function() {
   toggleGrid();
@@ -472,7 +472,7 @@ document.getElementById("shareLinkTextbox").addEventListener("focus", function()
 
 var paintBrushTileCode = null;
 var paintBrushSnakeColorIndex = 0;
-var paintBrushBlockColorIndex = 0;
+var paintBrushBlockId = 0;
 var paintBrushObject = null;
 var selectionStart = null;
 var selectionEnd = null;
@@ -565,7 +565,7 @@ canvas.addEventListener("mousedown", function(event) {
     if (object == null) return;
     if (object.type !== "s") return;
     // active snake
-    activeSnakeColor = object.color;
+    activeSnakeId = object.id;
     render();
   }
 });
@@ -582,11 +582,11 @@ canvas.addEventListener("dblclick", function(event) {
     if (object.type === "s") {
       // edit snakes of this color
       paintBrushTileCode = "s";
-      paintBrushSnakeColorIndex = object.color % snakeColors.length;
+      paintBrushSnakeColorIndex = object.id % snakeColors.length;
     } else if (object.type === "b") {
       // edit this particular block
       paintBrushTileCode = "b";
-      paintBrushBlockColorIndex = object.color;
+      paintBrushBlockId = object.id;
     } else throw asdf;
     paintBrushTileCodeChanged();
   }
@@ -685,22 +685,22 @@ function setPaintBrushTileCode(tileCode) {
       // next block id
       blocks.sort(compareColor);
       for (var i = 0; i < blocks.length; i++) {
-        if (blocks[i].color === paintBrushBlockColorIndex) {
+        if (blocks[i].id === paintBrushBlockId) {
           i += 1;
           break;
         }
       }
-      paintBrushBlockColorIndex = blocks[i % blocks.length].color;
+      paintBrushBlockId = blocks[i % blocks.length].id;
     } else {
       // new block id
-      paintBrushBlockColorIndex = null;
+      paintBrushBlockId = null;
     }
   } else if (tileCode == null) {
     // escape
-    if (paintBrushTileCode === "b" && paintBrushBlockColorIndex != null) {
+    if (paintBrushTileCode === "b" && paintBrushBlockId != null) {
       // stop editing this block, but keep the block brush selected
       tileCode = "b";
-      paintBrushBlockColorIndex = null;
+      paintBrushBlockId = null;
     }
   }
   paintBrushTileCode = tileCode;
@@ -876,11 +876,11 @@ function newSnake(color, location) {
   var snakes = findSnakesOfColor(color);
   snakes.sort(compareColor);
   for (var i = 0; i < snakes.length; i++) {
-    if (snakes[i].color !== i * snakeColors.length + color) break;
+    if (snakes[i].id !== i * snakeColors.length + color) break;
   }
   return {
     type: "s",
-    color: i * snakeColors.length + color,
+    id: i * snakeColors.length + color,
     dead: false,
     locations: [location],
   };
@@ -889,11 +889,11 @@ function newBlock(location) {
   var blocks = getBlocks();
   blocks.sort(compareColor);
   for (var i = 0; i < blocks.length; i++) {
-    if (blocks[i].color !== i) break;
+    if (blocks[i].id !== i) break;
   }
   return {
     type: "b",
-    color: i,
+    id: i,
     dead: false, // unused
     locations: [location],
   };
@@ -921,10 +921,10 @@ function paintAtLocation(location, changeLog) {
     });
     pastedData.selectedObjects.forEach(function(object) {
       // delete and recreate. could probably be just a move i guess. idk.
-      var otherObject = findObjectOfTypeAndColor(object.type, object.color);
+      var otherObject = findObjectOfTypeAndId(object.type, object.id);
       if (otherObject != null) removeObject(otherObject, changeLog);
       level.objects.push(object);
-      changeLog.push([object.type, object.color, [0,[]], serializeObjectState(object)]);
+      changeLog.push([object.type, object.id, [0,[]], serializeObjectState(object)]);
     });
   } else if (paintBrushTileCode === "s") {
     var oldSnakeSerialization = serializeObjectState(paintBrushObject);
@@ -951,19 +951,19 @@ function paintAtLocation(location, changeLog) {
       // extend le snake
       paintBrushObject.locations.unshift(location);
     }
-    changeLog.push([paintBrushObject.type, paintBrushObject.color, oldSnakeSerialization, serializeObjectState(paintBrushObject)]);
+    changeLog.push([paintBrushObject.type, paintBrushObject.id, oldSnakeSerialization, serializeObjectState(paintBrushObject)]);
   } else if (paintBrushTileCode === "b") {
     var objectHere = findObjectAtLocation(location);
-    if (paintBrushBlockColorIndex == null && objectHere != null && objectHere.type === "b") {
+    if (paintBrushBlockId == null && objectHere != null && objectHere.type === "b") {
       // just start editing this block
-      paintBrushBlockColorIndex = objectHere.color;
+      paintBrushBlockId = objectHere.id;
     } else {
       // make a change
       // make sure there's space behind us
       paintTileAtLocation(location, SPACE, changeLog);
       var thisBlock = null;
-      if (paintBrushBlockColorIndex != null) {
-        thisBlock = findBlockOfColor(paintBrushBlockColorIndex);
+      if (paintBrushBlockId != null) {
+        thisBlock = findBlockById(paintBrushBlockId);
       }
       var oldBlockSerialization = serializeObjectState(thisBlock);
       if (thisBlock == null) {
@@ -971,7 +971,7 @@ function paintAtLocation(location, changeLog) {
         removeAnyObjectAtLocation(location, changeLog);
         thisBlock = newBlock(location);
         level.objects.push(thisBlock);
-        paintBrushBlockColorIndex = thisBlock.color;
+        paintBrushBlockId = thisBlock.id;
       } else {
         var existingIndex = thisBlock.locations.indexOf(location);
         if (existingIndex !== -1) {
@@ -979,7 +979,7 @@ function paintAtLocation(location, changeLog) {
           if (thisBlock.locations.length === 1) {
             // goodbye
             removeObject(thisBlock, changeLog);
-            paintBrushBlockColorIndex = null;
+            paintBrushBlockId = null;
           } else {
             thisBlock.locations.splice(existingIndex, 1);
           }
@@ -989,7 +989,7 @@ function paintAtLocation(location, changeLog) {
           thisBlock.locations.push(location);
         }
       }
-      changeLog.push([thisBlock.type, thisBlock.color, oldBlockSerialization, serializeObjectState(thisBlock)]);
+      changeLog.push([thisBlock.type, thisBlock.id, oldBlockSerialization, serializeObjectState(thisBlock)]);
     }
   } else throw asdf;
   render();
@@ -1019,9 +1019,9 @@ function playtest() {
 function pushUndo(undoStuff, changeLog) {
   // changeLog = [
   //   ["m", 21, 0, 1],                              // map at location 23 changed from 0 to 1
-  //   ["s", 0, [false, [1,2]], [false, [2,3]]],     // snake color 0 moved from alive at [1, 2] to alive at [2, 3]
-  //   ["s", 1, [false, [11,12]], [true, [12,13]]],  // snake color 1 moved from alive at [11, 12] to dead at [12, 13]
-  //   ["b", 1, [false, [20,30]], [false, []]],      // block color 1 was deleted from location [20, 30]
+  //   ["s", 0, [false, [1,2]], [false, [2,3]]],     // snake id 0 moved from alive at [1, 2] to alive at [2, 3]
+  //   ["s", 1, [false, [11,12]], [true, [12,13]]],  // snake id 1 moved from alive at [11, 12] to dead at [12, 13]
+  //   ["b", 1, [false, [20,30]], [false, []]],      // block id 1 was deleted from location [20, 30]
   //   ["h", 25, 10],                                // height changed from 25 to 10. all cropped tiles are guaranteed to be SPACE.
   //   ["w", 8, 10],                                 // width changed from 8 to 10. a change in the coordinate system.
   //   ["m", 23, 2, 0],                              // map at location 23 changed from 2 to 0 in the new coordinate system.
@@ -1178,18 +1178,18 @@ function undoChanges(changes, changeLog) {
     } else if (change[0] === "s" || change[0] === "b") {
       // change object
       var type = change[0];
-      var color = change[1];
+      var id = change[1];
       var fromDead = change[2][0];
       var   toDead = change[3][0];
       var fromLocations = change[2][1].map(transformLocation);
       var   toLocations = change[3][1].map(transformLocation);
       if (fromLocations.filter(function(location) { return location >= level.map.length; }).length > 0) {
-        return "Can't move " + describe(type, color) + " out of bounds";
+        return "Can't move " + describe(type, id) + " out of bounds";
       }
-      var object = findObjectOfTypeAndColor(type, color);
+      var object = findObjectOfTypeAndId(type, id);
       if (toLocations.length !== 0) {
         // should exist at this location
-        if (object == null) return "Can't move " + describe(type, color) + " because it doesn't exit";
+        if (object == null) return "Can't move " + describe(type, id) + " because it doesn't exit";
         if (!deepEquals(object.locations, toLocations)) return "Can't move " + describe(object) + " because it's in the wrong place";
         if (object.dead !== toDead) return "Can't move " + describe(object) + " because it's alive/dead state doesn't match";
         // doit
@@ -1197,22 +1197,22 @@ function undoChanges(changes, changeLog) {
           var oldState = serializeObjectState(object);
           object.locations = fromLocations;
           object.dead = fromDead;
-          changeLog.push([object.type, object.color, oldState, serializeObjectState(object)]);
+          changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
         } else {
           removeObject(object, changeLog);
         }
       } else {
         // shouldn't exist
-        if (object != null) return "Can't create " + describe(type, color) + " because it already exists";
+        if (object != null) return "Can't create " + describe(type, id) + " because it already exists";
         // doit
         object = {
           type: type,
-          color: color,
+          id: id,
           dead: fromDead,
           locations: fromLocations,
         };
         level.objects.push(object);
-        changeLog.push([object.type, object.color, [0,[]], serializeObjectState(object)]);
+        changeLog.push([object.type, object.id, [0,[]], serializeObjectState(object)]);
       }
     } else throw asdf;
   }
@@ -1235,7 +1235,7 @@ function describe(arg1, arg2) {
   }
   if (arg1 === "s") {
     var color = (function() {
-      switch (snakeColors[arg2]) {
+      switch (snakeColors[arg2 % snakeColors.length]) {
         case "#f00": return " (Red)";
         case "#0f0": return " (Green)";
         case "#00f": return " (Blue)";
@@ -1248,7 +1248,7 @@ function describe(arg1, arg2) {
   if (arg1 === "b") {
     return "Block " + arg2;
   }
-  if (typeof arg1 === "object") return describe(arg1.type, arg1.color);
+  if (typeof arg1 === "object") return describe(arg1.type, arg1.id);
   throw asdf;
 }
 
@@ -1347,7 +1347,7 @@ function move(dr, dc) {
   if (!ate) {
     activeSnake.locations.pop();
   }
-  changeLog.push([activeSnake.type, activeSnake.color, activeSnakeOldState, serializeObjectState(activeSnake)]);
+  changeLog.push([activeSnake.type, activeSnake.id, activeSnakeOldState, serializeObjectState(activeSnake)]);
   // did you just push your face into a portal?
   var portalLocations = getActivePortalLocations();
   if (portalLocations.indexOf(newLocation) !== -1) {
@@ -1390,7 +1390,7 @@ function move(dr, dc) {
           // look what you've done
           var oldState = serializeObjectState(object);
           object.dead = true;
-          changeLog.push([object.type, object.color, oldState, serializeObjectState(object)]);
+          changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
           anySnakesDied = true;
         } else {
           // a box fell off the world
@@ -1481,7 +1481,7 @@ function checkMovement(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects
 function activateAnySnakePlease() {
   var snakes = getSnakes();
   if (snakes.length === 0) return; // nope.avi
-  activeSnakeColor = snakes[0].color;
+  activeSnakeId = snakes[0].id;
 }
 
 function moveObjects(objects, dr, dc, portalLocations, changeLog) {
@@ -1491,7 +1491,7 @@ function moveObjects(objects, dr, dc, portalLocations, changeLog) {
     for (var i = 0; i < object.locations.length; i++) {
       object.locations[i] = offsetLocation(object.locations[i], dr, dc);
     }
-    changeLog.push([object.type, object.color, oldState, serializeObjectState(object)]);
+    changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
 
     var newPortals = getSetIntersection(portalLocations, object.locations);
     var activatingPortals = newPortals.filter(function(portalLocation) {
@@ -1530,7 +1530,7 @@ function activatePortal(portalLocations, portalLocation, changeLog) {
   // zappo presto!
   var oldState = serializeObjectState(object);
   object.locations = newLocations;
-  changeLog.push([object.type, object.color, oldState, serializeObjectState(object)]);
+  changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
 }
 
 function isTileCodeAir(tileCode) {
@@ -1547,13 +1547,13 @@ function removeAnyObjectAtLocation(location, changeLog) {
 }
 function removeObject(object, changeLog) {
   removeFromArray(level.objects, object);
-  changeLog.push([object.type, object.color, [object.dead, copyArray(object.locations)], [0,[]]]);
-  if (object.type === "s" && object.color === activeSnakeColor) {
+  changeLog.push([object.type, object.id, [object.dead, copyArray(object.locations)], [0,[]]]);
+  if (object.type === "s" && object.id === activeSnakeId) {
     activateAnySnakePlease();
   }
-  if (object.type === "b" && paintBrushTileCode === "b" && paintBrushBlockColorIndex === object.color) {
+  if (object.type === "b" && paintBrushTileCode === "b" && paintBrushBlockId === object.id) {
     // no longer editing an object that doesn't exit
-    paintBrushBlockColorIndex = null;
+    paintBrushBlockId = null;
   }
 }
 function removeFromArray(array, element) {
@@ -1564,23 +1564,23 @@ function removeFromArray(array, element) {
 function findActiveSnake() {
   var snakes = getSnakes();
   for (var i = 0; i < snakes.length; i++) {
-    if (snakes[i].color === activeSnakeColor) return snakes[i];
+    if (snakes[i].id === activeSnakeId) return snakes[i];
   }
   throw asdf;
 }
-function findBlockOfColor(color) {
-  return findObjectOfTypeAndColor("b", color);
+function findBlockById(id) {
+  return findObjectOfTypeAndId("b", id);
 }
 function findSnakesOfColor(color) {
   return level.objects.filter(function(object) {
     if (object.type !== "s") return false;
-    return object.color % snakeColors.length === color;
+    return object.id % snakeColors.length === color;
   });
 }
-function findObjectOfTypeAndColor(type, color) {
+function findObjectOfTypeAndId(type, id) {
   for (var i = 0; i < level.objects.length; i++) {
     var object = level.objects[i];
-    if (object.type === type && object.color === color) return object;
+    if (object.type === type && object.id === id) return object;
   }
   return null;
 }
@@ -1642,7 +1642,7 @@ var snakeColors = [
 var blockForeground = "#800";
 var blockBackground = "#400";
 
-var activeSnakeColor = null;
+var activeSnakeId = null;
 
 function render() {
   if (level == null) return;
@@ -1673,12 +1673,12 @@ function render() {
 
   if (persistentState.showEditor) {
     if (paintBrushTileCode === "b") {
-      if (paintBrushBlockColorIndex != null) {
+      if (paintBrushBlockId != null) {
         // fade everything else away
         context.fillStyle = "rgba(0, 0, 0, 0.8)";
         context.fillRect(0, 0, canvas.width, canvas.height);
         // and render just this object in focus
-        var activeBlock = findBlockOfColor(paintBrushBlockColorIndex);
+        var activeBlock = findBlockById(paintBrushBlockId);
         renderLevel([activeBlock]);
       }
     } else if (paintBrushTileCode === "select") {
@@ -1758,11 +1758,11 @@ function render() {
           drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c, level, hoverLocation);
         }
       } else if (paintBrushTileCode === "s") {
-        if (!(objectHere != null && objectHere.type === "s" && objectHere.color === paintBrushSnakeColorIndex)) {
+        if (!(objectHere != null && objectHere.type === "s" && objectHere.id === paintBrushSnakeColorIndex)) {
           drawObject(newSnake(paintBrushSnakeColorIndex, hoverLocation));
         }
       } else if (paintBrushTileCode === "b") {
-        if (!(objectHere != null && objectHere.type === "b" && objectHere.color === paintBrushBlockColorIndex)) {
+        if (!(objectHere != null && objectHere.type === "b" && objectHere.id === paintBrushBlockId)) {
           drawObject(newBlock(hoverLocation));
         }
       } else if (paintBrushTileCode === "resize") {
@@ -1837,7 +1837,7 @@ function render() {
     switch (object.type) {
       case "s":
         var lastRowcol = null
-        var color = snakeColors[object.color % snakeColors.length];
+        var color = snakeColors[object.id % snakeColors.length];
         var headRowcol;
         object.locations.forEach(function(location) {
           var rowcol = getRowcol(level, location);
@@ -1854,16 +1854,15 @@ function render() {
           lastRowcol = rowcol;
         });
         // eye
-        if (object.color === activeSnakeColor) {
+        if (object.id === activeSnakeId) {
           drawCircle(headRowcol.r, headRowcol.c, 0.5, "#fff");
           drawCircle(headRowcol.r, headRowcol.c, 0.2, "#000");
         }
         break;
       case "b":
-        var color = blockForeground;
         object.locations.forEach(function(location) {
           var rowcol = getRowcol(level, location);
-          drawRect(rowcol.r, rowcol.c, color);
+          drawRect(rowcol.r, rowcol.c, blockForeground);
         });
         break;
       default: throw asdf;
@@ -2064,7 +2063,7 @@ function identityFunction(x) {
   return x;
 }
 function compareColor(a, b) {
-  return operatorCompare(a.color, b.color);
+  return operatorCompare(a.id, b.id);
 }
 function operatorCompare(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
