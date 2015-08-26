@@ -920,6 +920,7 @@ function paintAtLocation(location, changeLog) {
 
     // make sure there's space behind us
     paintTileAtLocation(location, SPACE, changeLog);
+    removeAnyObjectAtLocation(location, changeLog);
     if (paintBrushObject == null) {
       var thereWereNoSnakes = countSnakes() === 0;
       paintBrushObject = newSnake(paintBrushSnakeColorIndex, location);
@@ -933,6 +934,7 @@ function paintAtLocation(location, changeLog) {
   } else if (paintBrushTileCode === "b") {
     // make sure there's space behind us
     paintTileAtLocation(location, SPACE, changeLog);
+    removeAnyObjectAtLocation(location, changeLog);
     var thisBlock = findBlockOfColor(paintBrushBlockColorIndex);
     var oldBlockSerialization = serializeObjectState(thisBlock);
     if (thisBlock == null) {
