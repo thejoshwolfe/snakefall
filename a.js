@@ -550,16 +550,51 @@ var draggingChangeLog = null;
 canvas.addEventListener("mousedown", function(event) {
   if (event.altKey) return;
   if (event.button !== 0) return;
-  if (!persistentState.showEditor || paintBrushTileCode == null) return;
   event.preventDefault();
   var location = getLocationFromEvent(event);
-  lastDraggingRowcol = getRowcol(level, location);
-  if (paintBrushTileCode === "select") selectionStart = location;
-  if (paintBrushTileCode === "resize") resizeDragAnchorRowcol = lastDraggingRowcol;
-  draggingChangeLog = [];
-  paintAtLocation(location, draggingChangeLog);
+  if (persistentState.showEditor && paintBrushTileCode != null) {
+    // editor tool
+    lastDraggingRowcol = getRowcol(level, location);
+    if (paintBrushTileCode === "select") selectionStart = location;
+    if (paintBrushTileCode === "resize") resizeDragAnchorRowcol = lastDraggingRowcol;
+    draggingChangeLog = [];
+    paintAtLocation(location, draggingChangeLog);
+  } else {
+    // playtime
+    var object = findObjectAtLocation(location);
+    if (object == null) return;
+    if (object.type !== "s") return;
+    // active snake
+    activeSnakeColor = object.color;
+    render();
+  }
+});
+canvas.addEventListener("dblclick", function(event) {
+  if (event.altKey) return;
+  if (event.button !== 0) return;
+  event.preventDefault();
+  if (persistentState.showEditor && paintBrushTileCode === "select") {
+    // double click with select tool
+    var location = getLocationFromEvent(event);
+    var object = findObjectAtLocation(location);
+    if (object == null) return;
+    stopDragging();
+    if (object.type === "s") {
+      // edit snakes of this color
+      paintBrushTileCode = "s";
+      paintBrushSnakeColorIndex = object.color % snakeColors.length;
+    } else if (object.type === "b") {
+      // edit this particular block
+      paintBrushTileCode = "b";
+      paintBrushBlockColorIndex = object.color;
+    } else throw asdf;
+    paintBrushTileCodeChanged();
+  }
 });
 document.addEventListener("mouseup", function(event) {
+  stopDragging();
+});
+function stopDragging() {
   if (lastDraggingRowcol != null) {
     // release the draggin'
     lastDraggingRowcol = null;
@@ -568,7 +603,7 @@ document.addEventListener("mouseup", function(event) {
     pushUndo(uneditStuff, draggingChangeLog);
     draggingChangeLog = null;
   }
-});
+}
 canvas.addEventListener("mousemove", function(event) {
   if (!persistentState.showEditor) return;
   var location = getLocationFromEvent(event);
