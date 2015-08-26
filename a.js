@@ -95,13 +95,13 @@ function parseLevel(string) {
     object.type = string[cursor];
     var colorArray;
     if      (object.type === "s") { colorArray = snakeColors; }
-    else if (object.type === "b") { colorArray = blockColors; }
+    else if (object.type === "b") { colorArray = null; }
     else throw parserError("expected object type code");
     cursor += 1;
 
     // color
     object.color = readInt();
-    if (colorArray[object.color % colorArray.length] == null) throw parserError("invalid color index");
+    if (colorArray != null && colorArray[object.color % colorArray.length] == null) throw parserError("invalid color index");
 
     // locations
     var locationsData = readRun();
@@ -680,9 +680,27 @@ function setPaintBrushTileCode(tileCode) {
       paintBrushSnakeColorIndex = (paintBrushSnakeColorIndex + 1) % snakeColors.length;
     }
   } else if (tileCode === "b") {
-    if (paintBrushTileCode === "b") {
-      // next block color
-      paintBrushBlockColorIndex = (paintBrushBlockColorIndex + 1) % blockColors.length;
+    var blocks = getBlocks();
+    if (paintBrushTileCode === "b" && blocks.length > 0) {
+      // next block id
+      blocks.sort(compareColor);
+      for (var i = 0; i < blocks.length; i++) {
+        if (blocks[i].color === paintBrushBlockColorIndex) {
+          i += 1;
+          break;
+        }
+      }
+      paintBrushBlockColorIndex = blocks[i % blocks.length].color;
+    } else {
+      // new block id
+      paintBrushBlockColorIndex = null;
+    }
+  } else if (tileCode == null) {
+    // escape
+    if (paintBrushTileCode === "b" && paintBrushBlockColorIndex != null) {
+      // stop editing this block, but keep the block brush selected
+      tileCode = "b";
+      paintBrushBlockColorIndex = null;
     }
   }
   paintBrushTileCode = tileCode;
@@ -696,8 +714,6 @@ function paintBrushTileCodeChanged() {
     if (tileCode === paintBrushTileCode) {
       if (tileCode === "s") {
         backgroundStyle = snakeColors[paintBrushSnakeColorIndex];
-      } else if (tileCode === "b") {
-        backgroundStyle = blockColors[paintBrushBlockColorIndex].foreground;
       } else {
         backgroundStyle = "#ff0";
       }
@@ -869,10 +885,15 @@ function newSnake(color, location) {
     locations: [location],
   };
 }
-function newBlock(color, location) {
+function newBlock(location) {
+  var blocks = getBlocks();
+  blocks.sort(compareColor);
+  for (var i = 0; i < blocks.length; i++) {
+    if (blocks[i].color !== i) break;
+  }
   return {
     type: "b",
-    color: color,
+    color: i,
     dead: false, // unused
     locations: [location],
   };
@@ -932,29 +953,44 @@ function paintAtLocation(location, changeLog) {
     }
     changeLog.push([paintBrushObject.type, paintBrushObject.color, oldSnakeSerialization, serializeObjectState(paintBrushObject)]);
   } else if (paintBrushTileCode === "b") {
-    // make sure there's space behind us
-    paintTileAtLocation(location, SPACE, changeLog);
-    removeAnyObjectAtLocation(location, changeLog);
-    var thisBlock = findBlockOfColor(paintBrushBlockColorIndex);
-    var oldBlockSerialization = serializeObjectState(thisBlock);
-    if (thisBlock == null) {
-      thisBlock = newBlock(paintBrushBlockColorIndex, location);
-      level.objects.push(thisBlock);
+    var objectHere = findObjectAtLocation(location);
+    if (paintBrushBlockColorIndex == null && objectHere != null && objectHere.type === "b") {
+      // just start editing this block
+      paintBrushBlockColorIndex = objectHere.color;
     } else {
-      var existingIndex = thisBlock.locations.indexOf(location);
-      if (existingIndex !== -1) {
-        // reclicking part of this object means to delete just part of it.
-        if (thisBlock.locations.length === 1) {
-          removeObject(thisBlock, changeLog);
-        } else {
-          thisBlock.locations.splice(existingIndex, 1);
-        }
-      } else {
-        // add a tile to the block
-        thisBlock.locations.push(location);
+      // make a change
+      // make sure there's space behind us
+      paintTileAtLocation(location, SPACE, changeLog);
+      var thisBlock = null;
+      if (paintBrushBlockColorIndex != null) {
+        thisBlock = findBlockOfColor(paintBrushBlockColorIndex);
       }
+      var oldBlockSerialization = serializeObjectState(thisBlock);
+      if (thisBlock == null) {
+        // create new block
+        removeAnyObjectAtLocation(location, changeLog);
+        thisBlock = newBlock(location);
+        level.objects.push(thisBlock);
+        paintBrushBlockColorIndex = thisBlock.color;
+      } else {
+        var existingIndex = thisBlock.locations.indexOf(location);
+        if (existingIndex !== -1) {
+          // reclicking part of this object means to delete just part of it.
+          if (thisBlock.locations.length === 1) {
+            // goodbye
+            removeObject(thisBlock, changeLog);
+            paintBrushBlockColorIndex = null;
+          } else {
+            thisBlock.locations.splice(existingIndex, 1);
+          }
+        } else {
+          // add a tile to the block
+          removeAnyObjectAtLocation(location, changeLog);
+          thisBlock.locations.push(location);
+        }
+      }
+      changeLog.push([thisBlock.type, thisBlock.color, oldBlockSerialization, serializeObjectState(thisBlock)]);
     }
-    changeLog.push([thisBlock.type, thisBlock.color, oldBlockSerialization, serializeObjectState(thisBlock)]);
   } else throw asdf;
   render();
 }
@@ -1515,6 +1551,10 @@ function removeObject(object, changeLog) {
   if (object.type === "s" && object.color === activeSnakeColor) {
     activateAnySnakePlease();
   }
+  if (object.type === "b" && paintBrushTileCode === "b" && paintBrushBlockColorIndex === object.color) {
+    // no longer editing an object that doesn't exit
+    paintBrushBlockColorIndex = null;
+  }
 }
 function removeFromArray(array, element) {
   var index = array.indexOf(element);
@@ -1576,6 +1616,9 @@ function countSnakes() {
 function getSnakes() {
   return getObjectsOfType("s");
 }
+function getBlocks() {
+  return getObjectsOfType("b");
+}
 function getObjectsOfType(type) {
   return level.objects.filter(function(object) {
     return object.type == type;
@@ -1596,12 +1639,8 @@ var snakeColors = [
   "#00f",
   "#ff0",
 ];
-var blockColors = [
-  {foreground: "#800", background: "#400"},
-  {foreground: "#820", background: "#410"},
-  {foreground: "#802", background: "#401"},
-  {foreground: "#822", background: "#411"},
-];
+var blockForeground = "#800";
+var blockBackground = "#400";
 
 var activeSnakeColor = null;
 
@@ -1634,12 +1673,12 @@ function render() {
 
   if (persistentState.showEditor) {
     if (paintBrushTileCode === "b") {
-      var activeBlock = findBlockOfColor(paintBrushBlockColorIndex);
-      if (activeBlock != null) {
+      if (paintBrushBlockColorIndex != null) {
         // fade everything else away
         context.fillStyle = "rgba(0, 0, 0, 0.8)";
         context.fillRect(0, 0, canvas.width, canvas.height);
         // and render just this object in focus
+        var activeBlock = findBlockOfColor(paintBrushBlockColorIndex);
         renderLevel([activeBlock]);
       }
     } else if (paintBrushTileCode === "select") {
@@ -1668,13 +1707,12 @@ function render() {
     // begin by rendering the background connections for blocks
     objects.forEach(function(object) {
       if (object.type !== "b") return;
-      var color = blockColors[object.color].background;
       for (var i = 0; i < object.locations.length - 1; i++) {
         var rowcol1 = getRowcol(level, object.locations[i]);
         var rowcol2 = getRowcol(level, object.locations[i + 1]);
         var cornerRowcol = {r:rowcol1.r, c:rowcol2.c};
-        drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c, color);
-        drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c, color);
+        drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c, blockBackground);
+        drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c, blockBackground);
       }
     });
 
@@ -1725,7 +1763,7 @@ function render() {
         }
       } else if (paintBrushTileCode === "b") {
         if (!(objectHere != null && objectHere.type === "b" && objectHere.color === paintBrushBlockColorIndex)) {
-          drawObject(newBlock(paintBrushSnakeColorIndex, hoverLocation));
+          drawObject(newBlock(hoverLocation));
         }
       } else if (paintBrushTileCode === "resize") {
         void 0; // do nothing
@@ -1822,7 +1860,7 @@ function render() {
         }
         break;
       case "b":
-        var color = blockColors[object.color].foreground;
+        var color = blockForeground;
         object.locations.forEach(function(location) {
           var rowcol = getRowcol(level, location);
           drawRect(rowcol.r, rowcol.c, color);
