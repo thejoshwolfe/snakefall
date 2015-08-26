@@ -1563,12 +1563,6 @@ function render() {
   var context = canvas.getContext("2d");
   context.fillStyle = "#88f"; // sky
   context.fillRect(0, 0, canvas.width, canvas.height);
-  // active snake halo
-  if (countSnakes() > 1) {
-    var activeSnake = findActiveSnake();
-    var activeSnakeRowcol = getRowcol(level, activeSnake.locations[0]);
-    drawCircle(activeSnakeRowcol.r, activeSnakeRowcol.c, 2, "#fff");
-  }
 
   if (persistentState.showGrid && !persistentState.showEditor) {
     drawGrid();
@@ -1581,6 +1575,12 @@ function render() {
 
   if (persistentState.showGrid && persistentState.showEditor) {
     drawGrid();
+  }
+  // active snake halo
+  if (countSnakes() !== 0) {
+    var activeSnake = findActiveSnake();
+    var activeSnakeRowcol = getRowcol(level, activeSnake.locations[0]);
+    drawCircle(activeSnakeRowcol.r, activeSnakeRowcol.c, 2, "rgba(256,256,256,0.3)");
   }
 
   if (persistentState.showEditor) {
@@ -1751,11 +1751,13 @@ function render() {
       case "s":
         var lastRowcol = null
         var color = snakeColors[object.color];
+        var headRowcol;
         object.locations.forEach(function(location) {
           var rowcol = getRowcol(level, location);
           if (object.dead) rowcol.r += 0.5;
           if (lastRowcol == null) {
             // head
+            headRowcol = rowcol;
             drawDiamond(rowcol.r, rowcol.c, color);
           } else {
             // tail segment
@@ -1764,6 +1766,11 @@ function render() {
           }
           lastRowcol = rowcol;
         });
+        // eye
+        if (object.color === activeSnakeColor) {
+          drawCircle(headRowcol.r, headRowcol.c, 0.5, "#fff");
+          drawCircle(headRowcol.r, headRowcol.c, 0.2, "#000");
+        }
         break;
       case "b":
         var color = blockColors[object.color].foreground;
