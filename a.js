@@ -663,7 +663,7 @@ function setPaintBrushTileCode(tileCode) {
       selectionEnd = null;
       return;
     }
-    if (typeof tileCode === "number" && !(tileCode === EXIT || tileCode === PORTAL)) {
+    if (typeof tileCode === "number" && tileCode !== PORTAL) {
       // fill in the selection
       fillSelection(tileCode);
       selectionStart = null;
@@ -1014,15 +1014,6 @@ function paintAtLocation(location, changeLog) {
 
 function paintTileAtLocation(location, tileCode, changeLog) {
   if (level.map[location] === tileCode) return;
-  if (tileCode === EXIT) {
-    // delete any other exits
-    for (var i = 0; i < level.map.length; i++) {
-      if (level.map[i] === EXIT) {
-        changeLog.push(["m", i, level.map[i], SPACE]);
-        level.map[i] = SPACE;
-      }
-    }
-  }
   changeLog.push(["m", location, level.map[location], tileCode]);
   level.map[location] = tileCode;
 }
@@ -1245,7 +1236,7 @@ function describe(arg1, arg2) {
       case WALL:  return "a Wall";
       case SPIKE: return "Spikes";
       case FRUIT: return "Fruit";
-      case EXIT:  return "the Exit";
+      case EXIT:  return "an Exit";
       case PORTAL:  return "a Portal";
       default: throw asdf;
     }
