@@ -1997,7 +1997,7 @@ function render() {
     buffer.height = canvas.height;
     var localContext = buffer.getContext("2d");
 
-    localContext.strokeStyle = "#888";
+    localContext.strokeStyle = "#fff";
     localContext.beginPath();
     for (var r = 0; r < level.height; r++) {
       localContext.moveTo(0, tileSize*r);
@@ -2010,7 +2010,7 @@ function render() {
     localContext.stroke();
 
     context.save();
-    context.globalAlpha = 0.3;
+    context.globalAlpha = 0.4;
     context.drawImage(buffer, 0, 0);
     context.restore();
   }
