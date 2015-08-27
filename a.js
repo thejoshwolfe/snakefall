@@ -410,7 +410,7 @@ document.getElementById("switchSnakesButton").addEventListener("click", function
 function switchSnakes(delta) {
   if (!isAlive()) return;
   var snakes = getSnakes();
-  snakes.sort(compareColor);
+  snakes.sort(compareId);
   for (var i = 0; i < snakes.length; i++) {
     if (snakes[i].id === activeSnakeId) {
       activeSnakeId = snakes[(i + delta + snakes.length) % snakes.length].id;
@@ -682,15 +682,29 @@ function setPaintBrushTileCode(tileCode) {
   } else if (tileCode === "b") {
     var blocks = getBlocks();
     if (paintBrushTileCode === "b" && blocks.length > 0) {
-      // next block id
-      blocks.sort(compareColor);
-      for (var i = 0; i < blocks.length; i++) {
-        if (blocks[i].id === paintBrushBlockId) {
-          i += 1;
-          break;
-        }
+      // cycle through block ids
+      blocks.sort(compareId);
+      if (paintBrushBlockId != null) {
+        (function() {
+          for (var i = 0; i < blocks.length; i++) {
+            if (blocks[i].id === paintBrushBlockId) {
+              i += 1;
+              if (i < blocks.length) {
+                // next block id
+                paintBrushBlockId = blocks[i].id;
+              } else {
+                // new block id
+                paintBrushBlockId = null;
+              }
+              return;
+            }
+          }
+          throw asdf
+        })();
+      } else {
+        // first one
+        paintBrushBlockId = blocks[0].id;
       }
-      paintBrushBlockId = blocks[i % blocks.length].id;
     } else {
       // new block id
       paintBrushBlockId = null;
@@ -874,7 +888,7 @@ function setWidth(newWidth, changeLog) {
 
 function newSnake(color, location) {
   var snakes = findSnakesOfColor(color);
-  snakes.sort(compareColor);
+  snakes.sort(compareId);
   for (var i = 0; i < snakes.length; i++) {
     if (snakes[i].id !== i * snakeColors.length + color) break;
   }
@@ -887,7 +901,7 @@ function newSnake(color, location) {
 }
 function newBlock(location) {
   var blocks = getBlocks();
-  blocks.sort(compareColor);
+  blocks.sort(compareId);
   for (var i = 0; i < blocks.length; i++) {
     if (blocks[i].id !== i) break;
   }
@@ -2083,7 +2097,7 @@ function getNaiveOrthogonalPath(a, b) {
 function identityFunction(x) {
   return x;
 }
-function compareColor(a, b) {
+function compareId(a, b) {
   return operatorCompare(a.id, b.id);
 }
 function operatorCompare(a, b) {
