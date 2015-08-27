@@ -934,9 +934,12 @@ function paintAtLocation(location, changeLog) {
       paintTileAtLocation(location, tileCode, changeLog);
     });
     pastedData.selectedObjects.forEach(function(object) {
-      // delete and recreate. could probably be just a move i guess. idk.
-      var otherObject = findObjectOfTypeAndId(object.type, object.id);
-      if (otherObject != null) removeObject(otherObject, changeLog);
+      // refresh the ids so there are no collisions.
+      if (object.type === "s") {
+        object.id = newSnake(object.id % snakeColors.length).id;
+      } else if (object.type === "b") {
+        object.id = newBlock().id;
+      } else throw asdf;
       level.objects.push(object);
       changeLog.push([object.type, object.id, [0,[]], serializeObjectState(object)]);
     });
