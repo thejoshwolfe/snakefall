@@ -308,7 +308,8 @@ document.addEventListener("keydown", function(event) {
       if (persistentState.showEditor && modifierMask === CTRL)  { redo(uneditStuff); break; }
       return;
     case "R".charCodeAt(0):
-      if (modifierMask === 0) { reset(unmoveStuff); break; }
+      if (modifierMask === 0)     { reset(unmoveStuff);  break; }
+      if (modifierMask === SHIFT) { replay(unmoveStuff); break; }
       if ( persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
       return;
 
@@ -1144,6 +1145,17 @@ function undoOneFrame(undoStuff) {
 function redo(undoStuff) {
   if (undoStuff.redoStack.length === 0) return; // already at the beginning
   paradoxes = [];
+  redoOneFrame(undoStuff);
+  undoStuffChanged(undoStuff);
+}
+function replay(undoStuff) {
+  paradoxes = [];
+  while (undoStuff.redoStack.length > 0) {
+    redoOneFrame(undoStuff);
+  }
+  undoStuffChanged(undoStuff);
+}
+function redoOneFrame(undoStuff) {
   var doThis = undoStuff.redoStack.pop();
   var undoChangeLog = [];
   undoChanges(doThis, undoChangeLog);
@@ -1151,7 +1163,6 @@ function redo(undoStuff) {
     undoChangeLog.push(level.width);
     undoStuff.undoStack.push(undoChangeLog);
   }
-  undoStuffChanged(undoStuff);
 }
 function undoChanges(changes, changeLog) {
   var widthContext = changes.pop();
@@ -1648,7 +1659,7 @@ var snakeColors = [
   "#ff0",
 ];
 var blockForeground = ["#de5a6d","#fa65dd","#c367e3","#9c62fa","#625ff0"];
-var blockInside=      ["#b14857","#c850b0","#9c52b5","#7c4ec8","#4e4cc0"];
+var blockInside     = ["#b14857","#c850b0","#9c52b5","#7c4ec8","#4e4cc0"];
 var blockBackground = ["#853641","#963c84","#753d88","#5d3a96","#3a3990"];
 
 var activeSnakeId = null;
@@ -1720,8 +1731,8 @@ function render() {
         var rowcol1 = getRowcol(level, object.locations[i]);
         var rowcol2 = getRowcol(level, object.locations[i + 1]);
         var cornerRowcol = {r:rowcol1.r, c:rowcol2.c};
-        drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id%blockBackground.length]);
-        drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id%blockBackground.length]);
+        drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id % blockBackground.length]);
+        drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id % blockBackground.length]);
       }
     });
 
@@ -1947,8 +1958,8 @@ function render() {
     rowcols.forEach(function(rowcol) {
       var r = rowcol.r;
       var c = rowcol.c;
-      drawRect(r, c, blockInside[block.id%blockInside.length]);
-      context.fillStyle = blockForeground[block.id%blockForeground.length];
+      drawRect(r, c, blockInside[block.id % blockInside.length]);
+      context.fillStyle = blockForeground[block.id % blockForeground.length];
       drawTileOutlines(r, c, isAlsoThisBlock);
       function isAlsoThisBlock(dc, dr) {
         for (var i = 0; i < rowcols.length; i++) {
