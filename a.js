@@ -219,8 +219,19 @@ function decompressSerialization(string) {
   return result;
 }
 
-function saveToUrlBar() {
-  location.hash = "#level=" + compressSerialization(stringifyLevel(level));
+function stringifyReplay() {
+  throw asdf; // TODO
+}
+function parseAndLoadReplay(string) {
+  throw asdf; // TODO
+}
+
+function saveToUrlBar(withReplay) {
+  var hash = "#level=" + compressSerialization(stringifyLevel(level));
+  if (withReplay) {
+    hash += "#replay=" + stringifyReplay();
+  }
+  location.hash = hash;
 }
 
 function deepEquals(a, b) {
@@ -338,7 +349,8 @@ document.addEventListener("keydown", function(event) {
       if (!persistentState.showEditor && modifierMask === 0)     { move(1, 0); break; }
       if ( persistentState.showEditor && modifierMask === 0)     { setPaintBrushTileCode(SPIKE); break; }
       if ( persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("resize"); break; }
-      if ( persistentState.showEditor && modifierMask === CTRL)  { saveToUrlBar(); break; }
+      if (modifierMask ===  CTRL       ) { saveToUrlBar(); break; }
+      if (modifierMask === (CTRL|SHIFT)) { saveToUrlBar(true); break; }
       return;
     case "X".charCodeAt(0):
       if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(EXIT); break; }
@@ -422,6 +434,9 @@ function switchSnakes(delta) {
 }
 document.getElementById("showGridButton").addEventListener("click", function() {
   toggleGrid();
+});
+document.getElementById("saveProgressButton").addEventListener("click", function() {
+  saveToUrlBar(true);
 });
 document.getElementById("restartButton").addEventListener("click", function() {
   reset(unmoveStuff);
@@ -511,7 +526,7 @@ document.getElementById("reeditButton").addEventListener("click", function() {
   redo(uneditStuff);
   render();
 });
-document.getElementById("saveButton").addEventListener("click", function() {
+document.getElementById("saveLevelButton").addEventListener("click", function() {
   saveToUrlBar();
 });
 document.getElementById("copyButton").addEventListener("click", function() {
@@ -2125,12 +2140,25 @@ window.addEventListener("hashchange", function() {
   loadFromLocationHash();
 });
 function loadFromLocationHash() {
-  if (location.hash.indexOf("#level=") !== 0) return false;
+  var hashSegments = location.hash.split("#");
+  hashSegments.shift(); // first element is always ""
+  if (!(1 <= hashSegments.length && hashSegments.length <= 2)) return false;
+  var hashPairs = hashSegments.map(function(segment) {
+    var equalsIndex = segment.indexOf("=");
+    if (equalsIndex === -1) return ["", segment]; // bad
+    return [segment.substring(0, equalsIndex), segment.substring(equalsIndex + 1)];
+  });
+
+  if (hashPairs[0][0] !== "level") return false;
   try {
-    var level = parseLevel(location.hash.substring("#level=".length));
+    var level = parseLevel(hashPairs[0][1]);
   } catch (e) {
     alert(e);
     return false;
+  }
+  if (hashPairs.length > 1) {
+    if (hashPairs[1][0] !== "replay") return false;
+    if (!parseAndLoadReplay(hashPairs[1][1])) return false;
   }
   loadLevel(level);
   return true;
