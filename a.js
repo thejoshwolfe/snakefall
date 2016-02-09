@@ -319,9 +319,9 @@ document.addEventListener("keydown", function(event) {
       if (persistentState.showEditor && modifierMask === CTRL)  { redo(uneditStuff); break; }
       return;
     case "R".charCodeAt(0):
+      if (persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
       if (modifierMask === 0)     { reset(unmoveStuff);  break; }
       if (modifierMask === SHIFT) { replay(unmoveStuff); break; }
-      if ( persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
       return;
 
     case "P".charCodeAt(0):
