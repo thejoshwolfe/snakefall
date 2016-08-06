@@ -1348,6 +1348,8 @@ function showEditorChanged() {
 }
 
 function move(dr, dc) {
+  animationQueue = [];
+  animationStart = new Date().getTime();
   if (!isAlive()) return;
   var changeLog = [];
   var activeSnake = findActiveSnake();
@@ -1377,9 +1379,27 @@ function move(dr, dc) {
 
   // slither forward
   var activeSnakeOldState = serializeObjectState(activeSnake);
+  var slitherAnimations = [[
+    SLITHER_HEAD,
+    activeSnake.id,
+    activeSnake.locations[0],
+    newLocation,
+  ]];
   activeSnake.locations.unshift(newLocation);
   if (!ate) {
+    slitherAnimations.push([
+      SLITHER_TAIL,
+      activeSnake.id,
+      activeSnake.locations[activeSnake.locations.length - 1],
+      activeSnake.locations[activeSnake.locations.length - 2],
+    ]);
     activeSnake.locations.pop();
+  }
+  if (activeSnake.locations.length > 1) {
+    animationQueue.push(slitherAnimations);
+  } else {
+    // for a size 1 snake, it's really more of a move than a slither
+    throw new Error("TOTO");
   }
   changeLog.push([activeSnake.type, activeSnake.id, activeSnakeOldState, serializeObjectState(activeSnake)]);
   // did you just push your face into a portal?
@@ -1679,8 +1699,35 @@ var blockBackground = ["#853641","#963c84","#753d88","#5d3a96","#3a3990"];
 
 var activeSnakeId = null;
 
+var SLITHER_HEAD = "sh";
+var SLITHER_TAIL = "st";
+var animationQueue = [
+  // // sequence of disjoint animations. each completes before the next begins.
+  // [
+  //   // multiple things to animate simultaneously
+  //   [
+  //     SLITHER_HEAD | SLITHER_TAIL,
+  //     snakeId,
+  //     oldLocation,
+  //     newLocation,
+  //   ],
+  // ],
+];
+var animationStart = null; // new Date().getTime()
+var animationDuration = 70;
+
 function render() {
   if (level == null) return;
+  if (animationQueue.length > 0) {
+    var animationProgress = (new Date().getTime() - animationStart) / animationDuration;
+    if (animationProgress >= 1.0) {
+      // animation group complete
+      animationProgress -= 1.0;
+      animationQueue.shift();
+    }
+  }
+  if (animationQueue.length === 0) animationProgress = 1.0;
+  var inverseAnimationProgress = 1 - animationProgress;
   canvas.width = tileSize * level.width;
   canvas.height = tileSize * level.height;
   var context = canvas.getContext("2d");
@@ -1734,6 +1781,7 @@ function render() {
   // throw this in there somewhere
   document.getElementById("showGridButton").value = (persistentState.showGrid ? "Hide" : "Show") + " Grid";
 
+  if (animationProgress < 1.0) requestAnimationFrame(render);
   return; // this is the end of the function proper
 
   function renderLevel(onlyTheseObjects) {
@@ -1874,20 +1922,67 @@ function render() {
         var lastRowcol = null
         var color = snakeColors[object.id % snakeColors.length];
         var headRowcol;
-        object.locations.forEach(function(location) {
-          var rowcol = getRowcol(level, location);
+        for (var i = 0; i <= object.locations.length; i++) {
+          var animation;
+          var rowcol;
+          if (i === 0 && (animation = findAnimation(SLITHER_HEAD, object.id)) != null) {
+            // animate head slithering forward
+            rowcol = animatedRowcol(animation);
+          } else if (i === object.locations.length) {
+            // animated tail?
+            if ((animation = findAnimation(SLITHER_TAIL, object.id)) != null) {
+              // animate tail slithering to catch up
+              rowcol = animatedRowcol(animation);
+            } else {
+              // no animated tail needed
+              break;
+            }
+          } else {
+            rowcol = getRowcol(level, object.locations[i]);
+          }
           if (object.dead) rowcol.r += 0.5;
-          if (lastRowcol == null) {
+          if (i === 0) {
             // head
             headRowcol = rowcol;
             drawDiamond(rowcol.r, rowcol.c, color);
           } else {
-            // tail segment
-            drawCircle(rowcol.r, rowcol.c, 1, color);
-            drawRect((rowcol.r + lastRowcol.r) / 2, (rowcol.c + lastRowcol.c) / 2, color);
+            // middle
+            var cx = (rowcol.c + 0.5) * tileSize;
+            var cy = (rowcol.r + 0.5) * tileSize;
+            context.fillStyle = color;
+            var orientation;
+            if (lastRowcol.r < rowcol.r) {
+              orientation = 0;
+              context.beginPath();
+              context.moveTo((lastRowcol.c + 0) * tileSize, (lastRowcol.r + 0.5) * tileSize);
+              context.lineTo((lastRowcol.c + 1) * tileSize, (lastRowcol.r + 0.5) * tileSize);
+              context.arc(cx, cy, tileSize/2, 0, Math.PI);
+              context.fill();
+            } else if (lastRowcol.r > rowcol.r) {
+              orientation = 2;
+              context.beginPath();
+              context.moveTo((lastRowcol.c + 1) * tileSize, (lastRowcol.r + 0.5) * tileSize);
+              context.lineTo((lastRowcol.c + 0) * tileSize, (lastRowcol.r + 0.5) * tileSize);
+              context.arc(cx, cy, tileSize/2, Math.PI, 0);
+              context.fill();
+            } else if (lastRowcol.c < rowcol.c) {
+              orientation = 3;
+              context.beginPath();
+              context.moveTo((lastRowcol.c + 0.5) * tileSize, (lastRowcol.r + 1) * tileSize);
+              context.lineTo((lastRowcol.c + 0.5) * tileSize, (lastRowcol.r + 0) * tileSize);
+              context.arc(cx, cy, tileSize/2, 1.5 * Math.PI, 2.5 * Math.PI);
+              context.fill();
+            } else if (lastRowcol.c > rowcol.c) {
+              orientation = 1;
+              context.beginPath();
+              context.moveTo((lastRowcol.c + 0.5) * tileSize, (lastRowcol.r + 0) * tileSize);
+              context.lineTo((lastRowcol.c + 0.5) * tileSize, (lastRowcol.r + 1) * tileSize);
+              context.arc(cx, cy, tileSize/2, 2.5 * Math.PI, 1.5 * Math.PI);
+              context.fill();
+            }
           }
           lastRowcol = rowcol;
-        });
+        }
         // eye
         if (object.id === activeSnakeId) {
           drawCircle(headRowcol.r, headRowcol.c, 0.5, "#fff");
@@ -2039,6 +2134,27 @@ function render() {
     context.globalAlpha = 0.4;
     context.drawImage(buffer, 0, 0);
     context.restore();
+  }
+
+  function animatedRowcol(animation) {
+    var oldRowcol = getRowcol(level, animation[2]);
+    var newRowcol = getRowcol(level, animation[3]);
+    return {
+      r: oldRowcol.r * inverseAnimationProgress + newRowcol.r * animationProgress,
+      c: oldRowcol.c * inverseAnimationProgress + newRowcol.c * animationProgress,
+    };
+  }
+}
+
+function findAnimation(animationType, objectId) {
+  if (animationQueue.length === 0) return null;
+  var currentAnimation = animationQueue[0];
+  for (var i = 0; i < animationQueue[0].length; i++) {
+    var animation = currentAnimation[i];
+    if (animation[0] === animationType &&
+        animation[1] === objectId) {
+      return animation;
+    }
   }
 }
 
