@@ -1143,6 +1143,7 @@ function undo(undoStuff) {
   undoStuffChanged(undoStuff);
 }
 function reset(undoStuff) {
+  animationQueue = [];
   paradoxes = [];
   while (undoStuff.undoStack.length > 0) {
     undoOneFrame(undoStuff);
@@ -1160,11 +1161,13 @@ function undoOneFrame(undoStuff) {
 }
 function redo(undoStuff) {
   if (undoStuff.redoStack.length === 0) return; // already at the beginning
+  animationQueue = [];
   paradoxes = [];
   redoOneFrame(undoStuff);
   undoStuffChanged(undoStuff);
 }
 function replay(undoStuff) {
+  animationQueue = [];
   paradoxes = [];
   while (undoStuff.redoStack.length > 0) {
     redoOneFrame(undoStuff);
@@ -1380,24 +1383,27 @@ function move(dr, dc) {
 
   // slither forward
   var activeSnakeOldState = serializeObjectState(activeSnake);
+  var size1 = activeSnake.locations.length === 1;
   var slitherAnimations = [[
     // size-1 snakes really do more of a move than a slither
-    activeSnake.locations.length > 1 ?  SLITHER_HEAD : MOVE_SNAKE,
+    size1 ? MOVE_SNAKE : SLITHER_HEAD,
     activeSnake.id,
     dr,
     dc,
   ]];
   activeSnake.locations.unshift(newLocation);
-  if (!ate && activeSnake.locations.length > 1) {
+  if (!ate) {
     // drag your tail forward
     var oldRowcol = getRowcol(level, activeSnake.locations[activeSnake.locations.length - 1]);
     var newRowcol = getRowcol(level, activeSnake.locations[activeSnake.locations.length - 2]);
-    slitherAnimations.push([
-      SLITHER_TAIL,
-      activeSnake.id,
-      newRowcol.r - oldRowcol.r,
-      newRowcol.c - oldRowcol.c,
-    ]);
+    if (!size1) {
+      slitherAnimations.push([
+        SLITHER_TAIL,
+        activeSnake.id,
+        newRowcol.r - oldRowcol.r,
+        newRowcol.c - oldRowcol.c,
+      ]);
+    }
     activeSnake.locations.pop();
   }
   changeLog.push([activeSnake.type, activeSnake.id, activeSnakeOldState, serializeObjectState(activeSnake)]);
@@ -1727,13 +1733,7 @@ var animationQueue = [
   // [
   //   // multiple things to animate simultaneously
   //   [
-  //     SLITHER_HEAD | SLITHER_TAIL,
-  //     snakeId,
-  //     dr,
-  //     dc,
-  //   ],
-  //   [
-  //     MOVE_SNAKE | MOVE_BLOCK,
+  //     SLITHER_HEAD | SLITHER_TAIL | MOVE_SNAKE | MOVE_BLOCK,
   //     objectId,
   //     dr,
   //     dc,
@@ -1741,12 +1741,13 @@ var animationQueue = [
   // ],
 ];
 var animationStart = null; // new Date().getTime()
+var animationProgress; // 0.0 <= x < 1.0
 var animationDuration = 70;
 
 function render() {
   if (level == null) return;
   if (animationQueue.length > 0) {
-    var animationProgress = (new Date().getTime() - animationStart) / animationDuration;
+    animationProgress = (new Date().getTime() - animationStart) / animationDuration;
     if (animationProgress >= 1.0) {
       // animation group complete
       animationProgress -= 1.0;
@@ -1817,9 +1818,14 @@ function render() {
     // begin by rendering the background connections for blocks
     objects.forEach(function(object) {
       if (object.type !== "b") return;
+      var animationDisplacementRowcol = findAnimationDisplacementRowcol(MOVE_BLOCK, object.id);
       for (var i = 0; i < object.locations.length - 1; i++) {
         var rowcol1 = getRowcol(level, object.locations[i]);
+        rowcol1.r += animationDisplacementRowcol.r;
+        rowcol1.c += animationDisplacementRowcol.c;
         var rowcol2 = getRowcol(level, object.locations[i + 1]);
+        rowcol2.r += animationDisplacementRowcol.r;
+        rowcol2.c += animationDisplacementRowcol.c;
         var cornerRowcol = {r:rowcol1.r, c:rowcol2.c};
         drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id % blockBackground.length]);
         drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id % blockBackground.length]);
@@ -1947,39 +1953,30 @@ function render() {
     switch (object.type) {
       case "s":
         var animationDisplacementRowcol = findAnimationDisplacementRowcol(MOVE_SNAKE, object.id);
-        var movementAnimation = findAnimation(MOVE_SNAKE, object.id);
         var lastRowcol = null
         var color = snakeColors[object.id % snakeColors.length];
         var headRowcol;
         for (var i = 0; i <= object.locations.length; i++) {
           var animation;
           var rowcol;
-          if (movementAnimation != null) {
-            if (i === object.locations.length) break;
-            // falling or getting pushed
+          if (i === 0 && (animation = findAnimation(SLITHER_HEAD, object.id)) != null) {
+            // animate head slithering forward
             rowcol = getRowcol(level, object.locations[i]);
-            rowcol.r += movementAnimation[2] * (animationProgress - 1);
-            rowcol.c += movementAnimation[3] * (animationProgress - 1);
-          } else {
-            if (i === 0 && (animation = findAnimation(SLITHER_HEAD, object.id)) != null) {
-              // animate head slithering forward
-              rowcol = getRowcol(level, object.locations[i]);
+            rowcol.r += animation[2] * (animationProgress - 1);
+            rowcol.c += animation[3] * (animationProgress - 1);
+          } else if (i === object.locations.length) {
+            // animated tail?
+            if ((animation = findAnimation(SLITHER_TAIL, object.id)) != null) {
+              // animate tail slithering to catch up
+              rowcol = getRowcol(level, object.locations[i - 1]);
               rowcol.r += animation[2] * (animationProgress - 1);
               rowcol.c += animation[3] * (animationProgress - 1);
-            } else if (i === object.locations.length) {
-              // animated tail?
-              if ((animation = findAnimation(SLITHER_TAIL, object.id)) != null) {
-                // animate tail slithering to catch up
-                rowcol = getRowcol(level, object.locations[i - 1]);
-                rowcol.r += animation[2] * (animationProgress - 1);
-                rowcol.c += animation[3] * (animationProgress - 1);
-              } else {
-                // no animated tail needed
-                break;
-              }
             } else {
-              rowcol = getRowcol(level, object.locations[i]);
+              // no animated tail needed
+              break;
             }
+          } else {
+            rowcol = getRowcol(level, object.locations[i]);
           }
           if (object.dead) rowcol.r += 0.5;
           rowcol.r += animationDisplacementRowcol.r;
@@ -2106,24 +2103,19 @@ function render() {
   }
   function drawBlock(block) {
     var animationDisplacementRowcol = findAnimationDisplacementRowcol(MOVE_BLOCK, block.id);
-    var movementAnimation = findAnimation(MOVE_BLOCK, block.id);
     var rowcols = block.locations.map(function(location) {
       return getRowcol(level, location);
     });
     rowcols.forEach(function(rowcol) {
       var r = rowcol.r + animationDisplacementRowcol.r;
       var c = rowcol.c + animationDisplacementRowcol.c;
-      if (movementAnimation != null) {
-        r += movementAnimation[2] * (animationProgress - 1);
-        c += movementAnimation[3] * (animationProgress - 1);
-      }
       drawRect(r, c, blockInside[block.id % blockInside.length]);
       context.fillStyle = blockForeground[block.id % blockForeground.length];
       drawTileOutlines(r, c, isAlsoThisBlock);
       function isAlsoThisBlock(dc, dr) {
         for (var i = 0; i < rowcols.length; i++) {
-          var rowcol = rowcols[i];
-          if (r + dr === rowcol.r && c + dc === rowcol.c) return true;
+          var otherRowcol = rowcols[i];
+          if (rowcol.r + dr === otherRowcol.r && rowcol.c + dc === otherRowcol.c) return true;
         }
         return false;
       }
@@ -2210,6 +2202,11 @@ function findAnimationDisplacementRowcol(animationType, objectId) {
         dc += animation[3];
       }
     });
+  }
+  var movementAnimation = findAnimation(animationType, objectId);
+  if (movementAnimation != null) {
+    dr += movementAnimation[2] * (1 - animationProgress);
+    dc += movementAnimation[3] * (1 - animationProgress);
   }
   return {r: -dr, c: -dc};
 }
