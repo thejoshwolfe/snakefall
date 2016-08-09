@@ -1417,15 +1417,7 @@ function move(dr, dc) {
     activatePortal(portalLocations, newLocation, changeLog);
   }
   // push everything, too
-  moveObjects(pushedObjects, dr, dc, portalLocations, changeLog);
-  pushedObjects.forEach(function(object) {
-    slitherAnimations.push([
-      "m" + object.type, // MOVE_SNAKE | MOVE_BLOCK
-      object.id,
-      dr,
-      dc,
-    ]);
-  });
+  moveObjects(pushedObjects, dr, dc, portalLocations, changeLog, slitherAnimations);
   animationQueue.push(slitherAnimations);
 
   // gravity loop
@@ -1476,15 +1468,7 @@ function move(dr, dc) {
       if (anySnakesDied) break;
     }
     if (fallingObjects.length > 0) {
-      moveObjects(fallingObjects, 1, 0, portalLocations, changeLog);
-      fallingObjects.forEach(function(object) {
-        fallingAnimations.push([
-          "m" + object.type, // MOVE_SNAKE | MOVE_BLOCK
-          object.id,
-          1,
-          0,
-        ]);
-      });
+      moveObjects(fallingObjects, 1, 0, portalLocations, changeLog, fallingAnimations);
       didAnything = true;
     }
 
@@ -1568,7 +1552,7 @@ function activateAnySnakePlease() {
   activeSnakeId = snakes[0].id;
 }
 
-function moveObjects(objects, dr, dc, portalLocations, changeLog) {
+function moveObjects(objects, dr, dc, portalLocations, changeLog, animations) {
   objects.forEach(function(object) {
     var oldState = serializeObjectState(object);
     var oldPortals = getSetIntersection(portalLocations, object.locations);
@@ -1576,6 +1560,12 @@ function moveObjects(objects, dr, dc, portalLocations, changeLog) {
       object.locations[i] = offsetLocation(object.locations[i], dr, dc);
     }
     changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
+    animations.push([
+      "m" + object.type, // MOVE_SNAKE | MOVE_BLOCK
+      object.id,
+      dr,
+      dc,
+    ]);
 
     var newPortals = getSetIntersection(portalLocations, object.locations);
     var activatingPortals = newPortals.filter(function(portalLocation) {
