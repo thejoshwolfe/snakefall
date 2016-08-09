@@ -1384,13 +1384,16 @@ function move(dr, dc) {
   // slither forward
   var activeSnakeOldState = serializeObjectState(activeSnake);
   var size1 = activeSnake.locations.length === 1;
-  var slitherAnimations = [[
-    // size-1 snakes really do more of a move than a slither
-    size1 ? MOVE_SNAKE : SLITHER_HEAD,
-    activeSnake.id,
-    dr,
-    dc,
-  ]];
+  var slitherAnimations = [
+    70,
+    [
+      // size-1 snakes really do more of a move than a slither
+      size1 ? MOVE_SNAKE : SLITHER_HEAD,
+      activeSnake.id,
+      dr,
+      dc,
+    ]
+  ];
   activeSnake.locations.unshift(newLocation);
   if (!ate) {
     // drag your tail forward
@@ -1426,9 +1429,11 @@ function move(dr, dc) {
   animationQueue.push(slitherAnimations);
 
   // gravity loop
-  while (isGravity()) {
+  if (isGravity()) for (var fallHeight = 1;; fallHeight++) {
     var didAnything = false;
-    var fallingAnimations = [];
+    var fallingAnimations = [
+      70 / Math.sqrt(fallHeight),
+    ];
 
     // check for exit
     if (!isUneatenFruit()) {
@@ -1729,8 +1734,10 @@ var SLITHER_TAIL = "st";
 var MOVE_SNAKE = "ms";
 var MOVE_BLOCK = "mb";
 var animationQueue = [
-  // // sequence of disjoint animations. each completes before the next begins.
+  // // sequence of disjoint animation groups.
+  // // each group completes before the next begins.
   // [
+  //   70, // duration of this animation group
   //   // multiple things to animate simultaneously
   //   [
   //     SLITHER_HEAD | SLITHER_TAIL | MOVE_SNAKE | MOVE_BLOCK,
@@ -1742,11 +1749,11 @@ var animationQueue = [
 ];
 var animationStart = null; // new Date().getTime()
 var animationProgress; // 0.0 <= x < 1.0
-var animationDuration = 70;
 
 function render() {
   if (level == null) return;
   if (animationQueue.length > 0) {
+    var animationDuration = animationQueue[0][0];
     animationProgress = (new Date().getTime() - animationStart) / animationDuration;
     if (animationProgress >= 1.0) {
       // animation group complete
@@ -2181,7 +2188,7 @@ function render() {
 function findAnimation(animationType, objectId) {
   if (animationQueue.length === 0) return null;
   var currentAnimation = animationQueue[0];
-  for (var i = 0; i < animationQueue[0].length; i++) {
+  for (var i = 1; i < currentAnimation.length; i++) {
     var animation = currentAnimation[i];
     if (animation[0] === animationType &&
         animation[1] === objectId) {
@@ -2195,13 +2202,14 @@ function findAnimationDisplacementRowcol(animationType, objectId) {
   // skip the current one
   for (var i = 1; i < animationQueue.length; i++) {
     var animations = animationQueue[i];
-    animations.forEach(function(animation) {
+    for (var j = 1; j < animations.length; j++) {
+      var animation = animations[j];
       if (animation[0] === animationType &&
           animation[1] === objectId) {
         dr += animation[2];
         dc += animation[3];
       }
-    });
+    }
   }
   var movementAnimation = findAnimation(animationType, objectId);
   if (movementAnimation != null) {
