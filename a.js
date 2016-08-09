@@ -1413,15 +1413,25 @@ function move(dr, dc) {
 
   // did you just push your face into a portal?
   var portalLocations = getActivePortalLocations();
+  var portalActivationLocations = [];
   if (portalLocations.indexOf(newLocation) !== -1) {
-    activatePortal(portalLocations, newLocation, changeLog);
+    portalActivationLocations.push(newLocation);
   }
   // push everything, too
-  moveObjects(pushedObjects, dr, dc, portalLocations, changeLog, slitherAnimations);
+  moveObjects(pushedObjects, dr, dc, portalLocations, portalActivationLocations, changeLog, slitherAnimations);
   animationQueue.push(slitherAnimations);
 
   // gravity loop
   if (isGravity()) for (var fallHeight = 1;; fallHeight++) {
+    // do portals separate from falling logic
+    if (portalActivationLocations.length === 1) {
+      var portalAnimations = [500];
+      if (activatePortal(portalLocations, portalActivationLocations[0], portalAnimations, changeLog)) {
+        animationQueue.push(portalAnimations);
+      }
+      portalActivationLocations = [];
+    }
+    // now do falling logic
     var didAnything = false;
     var fallingAnimations = [
       70 / Math.sqrt(fallHeight),
@@ -1468,7 +1478,7 @@ function move(dr, dc) {
       if (anySnakesDied) break;
     }
     if (fallingObjects.length > 0) {
-      moveObjects(fallingObjects, 1, 0, portalLocations, changeLog, fallingAnimations);
+      moveObjects(fallingObjects, 1, 0, portalLocations, portalActivationLocations, changeLog, fallingAnimations);
       didAnything = true;
     }
 
@@ -1552,7 +1562,7 @@ function activateAnySnakePlease() {
   activeSnakeId = snakes[0].id;
 }
 
-function moveObjects(objects, dr, dc, portalLocations, changeLog, animations) {
+function moveObjects(objects, dr, dc, portalLocations, portalActivationLocations, changeLog, animations) {
   objects.forEach(function(object) {
     var oldState = serializeObjectState(object);
     var oldPortals = getSetIntersection(portalLocations, object.locations);
@@ -1573,12 +1583,12 @@ function moveObjects(objects, dr, dc, portalLocations, changeLog, animations) {
     });
     if (activatingPortals.length === 1) {
       // exactly one new portal we're touching. activate it
-      activatePortal(portalLocations, activatingPortals[0], changeLog);
+      portalActivationLocations.push(activatingPortals[0]);
     }
   });
 }
 
-function activatePortal(portalLocations, portalLocation, changeLog) {
+function activatePortal(portalLocations, portalLocation, animations, changeLog) {
   var otherPortalLocation = portalLocations[1 - portalLocations.indexOf(portalLocation)];
   var portalRowcol = getRowcol(level, portalLocation);
   var otherPortalRowcol = getRowcol(level, otherPortalLocation);
@@ -1590,21 +1600,28 @@ function activatePortal(portalLocations, portalLocation, changeLog) {
     var rowcol = getRowcol(level, object.locations[i]);
     var r = rowcol.r + delta.r;
     var c = rowcol.c + delta.c;
-    if (!isInBounds(level, r, c)) return; // out of bounds
+    if (!isInBounds(level, r, c)) return false; // out of bounds
     newLocations.push(getLocation(level, r, c));
   }
 
   for (var i = 0; i < newLocations.length; i++) {
     var location = newLocations[i];
-    if (!isTileCodeAir(level.map[location])) return; // blocked by tile
+    if (!isTileCodeAir(level.map[location])) return false; // blocked by tile
     var otherObject = findObjectAtLocation(location);
-    if (otherObject != null && otherObject !== object) return; // blocked by object
+    if (otherObject != null && otherObject !== object) return false; // blocked by object
   }
 
   // zappo presto!
   var oldState = serializeObjectState(object);
   object.locations = newLocations;
   changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
+  animations.push([
+    "t" + object.type, // TELEPORT_SNAKE | TELEPORT_BLOCK
+    object.id,
+    delta.r,
+    delta.c,
+  ]);
+  return true;
 }
 
 function isTileCodeAir(tileCode) {
@@ -1723,6 +1740,8 @@ var SLITHER_HEAD = "sh";
 var SLITHER_TAIL = "st";
 var MOVE_SNAKE = "ms";
 var MOVE_BLOCK = "mb";
+var TELEPORT_SNAKE = "ms";
+var TELEPORT_BLOCK = "mb";
 var animationQueue = [
   // // sequence of disjoint animation groups.
   // // each group completes before the next begins.
@@ -1730,7 +1749,7 @@ var animationQueue = [
   //   70, // duration of this animation group
   //   // multiple things to animate simultaneously
   //   [
-  //     SLITHER_HEAD | SLITHER_TAIL | MOVE_SNAKE | MOVE_BLOCK,
+  //     SLITHER_HEAD | SLITHER_TAIL | MOVE_SNAKE | MOVE_BLOCK | TELEPORT_SNAKE | TELEPORT_BLOCK,
   //     objectId,
   //     dr,
   //     dc,
@@ -1815,7 +1834,7 @@ function render() {
     // begin by rendering the background connections for blocks
     objects.forEach(function(object) {
       if (object.type !== "b") return;
-      var animationDisplacementRowcol = findAnimationDisplacementRowcol(MOVE_BLOCK, object.id);
+      var animationDisplacementRowcol = findAnimationDisplacementRowcol(object.type, object.id);
       for (var i = 0; i < object.locations.length - 1; i++) {
         var rowcol1 = getRowcol(level, object.locations[i]);
         rowcol1.r += animationDisplacementRowcol.r;
@@ -1949,21 +1968,21 @@ function render() {
   function drawObject(object) {
     switch (object.type) {
       case "s":
-        var animationDisplacementRowcol = findAnimationDisplacementRowcol(MOVE_SNAKE, object.id);
+        var animationDisplacementRowcol = findAnimationDisplacementRowcol(object.type, object.id);
         var lastRowcol = null
         var color = snakeColors[object.id % snakeColors.length];
         var headRowcol;
         for (var i = 0; i <= object.locations.length; i++) {
           var animation;
           var rowcol;
-          if (i === 0 && (animation = findAnimation(SLITHER_HEAD, object.id)) != null) {
+          if (i === 0 && (animation = findAnimation([SLITHER_HEAD], object.id)) != null) {
             // animate head slithering forward
             rowcol = getRowcol(level, object.locations[i]);
             rowcol.r += animation[2] * (animationProgress - 1);
             rowcol.c += animation[3] * (animationProgress - 1);
           } else if (i === object.locations.length) {
             // animated tail?
-            if ((animation = findAnimation(SLITHER_TAIL, object.id)) != null) {
+            if ((animation = findAnimation([SLITHER_TAIL], object.id)) != null) {
               // animate tail slithering to catch up
               rowcol = getRowcol(level, object.locations[i - 1]);
               rowcol.r += animation[2] * (animationProgress - 1);
@@ -2099,7 +2118,7 @@ function render() {
     context.fillRect(xLo, yLo, xHi - xLo, yHi - yLo);
   }
   function drawBlock(block) {
-    var animationDisplacementRowcol = findAnimationDisplacementRowcol(MOVE_BLOCK, block.id);
+    var animationDisplacementRowcol = findAnimationDisplacementRowcol(block.type, block.id);
     var rowcols = block.locations.map(function(location) {
       return getRowcol(level, location);
     });
@@ -2175,33 +2194,37 @@ function render() {
   }
 }
 
-function findAnimation(animationType, objectId) {
+function findAnimation(animationTypes, objectId) {
   if (animationQueue.length === 0) return null;
   var currentAnimation = animationQueue[0];
   for (var i = 1; i < currentAnimation.length; i++) {
     var animation = currentAnimation[i];
-    if (animation[0] === animationType &&
+    if (animationTypes.indexOf(animation[0]) !== -1 &&
         animation[1] === objectId) {
       return animation;
     }
   }
 }
-function findAnimationDisplacementRowcol(animationType, objectId) {
+function findAnimationDisplacementRowcol(objectType, objectId) {
   var dr = 0;
   var dc = 0;
+  var animationTypes = [
+    "m" + objectType, // MOVE_SNAKE | MOVE_BLOCK
+    "t" + objectType, // TELEPORT_SNAKE | TELEPORT_BLOCK
+  ];
   // skip the current one
   for (var i = 1; i < animationQueue.length; i++) {
     var animations = animationQueue[i];
     for (var j = 1; j < animations.length; j++) {
       var animation = animations[j];
-      if (animation[0] === animationType &&
+      if (animationTypes.indexOf(animation[0]) !== -1 &&
           animation[1] === objectId) {
         dr += animation[2];
         dc += animation[3];
       }
     }
   }
-  var movementAnimation = findAnimation(animationType, objectId);
+  var movementAnimation = findAnimation(animationTypes, objectId);
   if (movementAnimation != null) {
     dr += movementAnimation[2] * (1 - animationProgress);
     dc += movementAnimation[3] * (1 - animationProgress);
