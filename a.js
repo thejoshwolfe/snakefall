@@ -1137,6 +1137,7 @@ function reduceChangeLog(changeLog) {
 }
 function undo(undoStuff) {
   if (undoStuff.undoStack.length === 0) return; // already at the beginning
+  animationQueue = [];
   paradoxes = [];
   undoOneFrame(undoStuff);
   undoStuffChanged(undoStuff);
@@ -1380,28 +1381,27 @@ function move(dr, dc) {
   // slither forward
   var activeSnakeOldState = serializeObjectState(activeSnake);
   var slitherAnimations = [[
-    SLITHER_HEAD,
+    // size-1 snakes really do more of a move than a slither
+    activeSnake.locations.length > 1 ?  SLITHER_HEAD : MOVE_SNAKE,
     activeSnake.id,
-    activeSnake.locations[0],
-    newLocation,
+    dr,
+    dc,
   ]];
   activeSnake.locations.unshift(newLocation);
-  if (!ate) {
+  if (!ate && activeSnake.locations.length > 1) {
+    // drag your tail forward
+    var oldRowcol = getRowcol(level, activeSnake.locations[activeSnake.locations.length - 1]);
+    var newRowcol = getRowcol(level, activeSnake.locations[activeSnake.locations.length - 2]);
     slitherAnimations.push([
       SLITHER_TAIL,
       activeSnake.id,
-      activeSnake.locations[activeSnake.locations.length - 1],
-      activeSnake.locations[activeSnake.locations.length - 2],
+      newRowcol.r - oldRowcol.r,
+      newRowcol.c - oldRowcol.c,
     ]);
     activeSnake.locations.pop();
   }
-  if (activeSnake.locations.length > 1) {
-    animationQueue.push(slitherAnimations);
-  } else {
-    // for a size 1 snake, it's really more of a move than a slither
-    throw new Error("TOTO");
-  }
   changeLog.push([activeSnake.type, activeSnake.id, activeSnakeOldState, serializeObjectState(activeSnake)]);
+
   // did you just push your face into a portal?
   var portalLocations = getActivePortalLocations();
   if (portalLocations.indexOf(newLocation) !== -1) {
@@ -1409,10 +1409,20 @@ function move(dr, dc) {
   }
   // push everything, too
   moveObjects(pushedObjects, dr, dc, portalLocations, changeLog);
+  pushedObjects.forEach(function(object) {
+    slitherAnimations.push([
+      "m" + object.type, // MOVE_SNAKE | MOVE_BLOCK
+      object.id,
+      dr,
+      dc,
+    ]);
+  });
+  animationQueue.push(slitherAnimations);
 
   // gravity loop
   while (isGravity()) {
     var didAnything = false;
+    var fallingAnimations = [];
 
     // check for exit
     if (!isUneatenFruit()) {
@@ -1456,10 +1466,19 @@ function move(dr, dc) {
     }
     if (fallingObjects.length > 0) {
       moveObjects(fallingObjects, 1, 0, portalLocations, changeLog);
+      fallingObjects.forEach(function(object) {
+        fallingAnimations.push([
+          "m" + object.type, // MOVE_SNAKE | MOVE_BLOCK
+          object.id,
+          1,
+          0,
+        ]);
+      });
       didAnything = true;
     }
 
     if (!didAnything) break;
+    animationQueue.push(fallingAnimations);
   }
 
   pushUndo(unmoveStuff, changeLog);
@@ -1701,6 +1720,8 @@ var activeSnakeId = null;
 
 var SLITHER_HEAD = "sh";
 var SLITHER_TAIL = "st";
+var MOVE_SNAKE = "ms";
+var MOVE_BLOCK = "mb";
 var animationQueue = [
   // // sequence of disjoint animations. each completes before the next begins.
   // [
@@ -1708,8 +1729,14 @@ var animationQueue = [
   //   [
   //     SLITHER_HEAD | SLITHER_TAIL,
   //     snakeId,
-  //     oldLocation,
-  //     newLocation,
+  //     dr,
+  //     dc,
+  //   ],
+  //   [
+  //     MOVE_SNAKE | MOVE_BLOCK,
+  //     objectId,
+  //     dr,
+  //     dc,
   //   ],
   // ],
 ];
@@ -1724,10 +1751,10 @@ function render() {
       // animation group complete
       animationProgress -= 1.0;
       animationQueue.shift();
+      animationStart = new Date().getTime();
     }
   }
   if (animationQueue.length === 0) animationProgress = 1.0;
-  var inverseAnimationProgress = 1 - animationProgress;
   canvas.width = tileSize * level.width;
   canvas.height = tileSize * level.height;
   var context = canvas.getContext("2d");
@@ -1919,28 +1946,44 @@ function render() {
   function drawObject(object) {
     switch (object.type) {
       case "s":
+        var animationDisplacementRowcol = findAnimationDisplacementRowcol(MOVE_SNAKE, object.id);
+        var movementAnimation = findAnimation(MOVE_SNAKE, object.id);
         var lastRowcol = null
         var color = snakeColors[object.id % snakeColors.length];
         var headRowcol;
         for (var i = 0; i <= object.locations.length; i++) {
           var animation;
           var rowcol;
-          if (i === 0 && (animation = findAnimation(SLITHER_HEAD, object.id)) != null) {
-            // animate head slithering forward
-            rowcol = animatedRowcol(animation);
-          } else if (i === object.locations.length) {
-            // animated tail?
-            if ((animation = findAnimation(SLITHER_TAIL, object.id)) != null) {
-              // animate tail slithering to catch up
-              rowcol = animatedRowcol(animation);
-            } else {
-              // no animated tail needed
-              break;
-            }
-          } else {
+          if (movementAnimation != null) {
+            if (i === object.locations.length) break;
+            // falling or getting pushed
             rowcol = getRowcol(level, object.locations[i]);
+            rowcol.r += movementAnimation[2] * (animationProgress - 1);
+            rowcol.c += movementAnimation[3] * (animationProgress - 1);
+          } else {
+            if (i === 0 && (animation = findAnimation(SLITHER_HEAD, object.id)) != null) {
+              // animate head slithering forward
+              rowcol = getRowcol(level, object.locations[i]);
+              rowcol.r += animation[2] * (animationProgress - 1);
+              rowcol.c += animation[3] * (animationProgress - 1);
+            } else if (i === object.locations.length) {
+              // animated tail?
+              if ((animation = findAnimation(SLITHER_TAIL, object.id)) != null) {
+                // animate tail slithering to catch up
+                rowcol = getRowcol(level, object.locations[i - 1]);
+                rowcol.r += animation[2] * (animationProgress - 1);
+                rowcol.c += animation[3] * (animationProgress - 1);
+              } else {
+                // no animated tail needed
+                break;
+              }
+            } else {
+              rowcol = getRowcol(level, object.locations[i]);
+            }
           }
           if (object.dead) rowcol.r += 0.5;
+          rowcol.r += animationDisplacementRowcol.r;
+          rowcol.c += animationDisplacementRowcol.c;
           if (i === 0) {
             // head
             headRowcol = rowcol;
@@ -2062,12 +2105,18 @@ function render() {
     context.fillRect(xLo, yLo, xHi - xLo, yHi - yLo);
   }
   function drawBlock(block) {
+    var animationDisplacementRowcol = findAnimationDisplacementRowcol(MOVE_BLOCK, block.id);
+    var movementAnimation = findAnimation(MOVE_BLOCK, block.id);
     var rowcols = block.locations.map(function(location) {
       return getRowcol(level, location);
     });
     rowcols.forEach(function(rowcol) {
-      var r = rowcol.r;
-      var c = rowcol.c;
+      var r = rowcol.r + animationDisplacementRowcol.r;
+      var c = rowcol.c + animationDisplacementRowcol.c;
+      if (movementAnimation != null) {
+        r += movementAnimation[2] * (animationProgress - 1);
+        c += movementAnimation[3] * (animationProgress - 1);
+      }
       drawRect(r, c, blockInside[block.id % blockInside.length]);
       context.fillStyle = blockForeground[block.id % blockForeground.length];
       drawTileOutlines(r, c, isAlsoThisBlock);
@@ -2135,15 +2184,6 @@ function render() {
     context.drawImage(buffer, 0, 0);
     context.restore();
   }
-
-  function animatedRowcol(animation) {
-    var oldRowcol = getRowcol(level, animation[2]);
-    var newRowcol = getRowcol(level, animation[3]);
-    return {
-      r: oldRowcol.r * inverseAnimationProgress + newRowcol.r * animationProgress,
-      c: oldRowcol.c * inverseAnimationProgress + newRowcol.c * animationProgress,
-    };
-  }
 }
 
 function findAnimation(animationType, objectId) {
@@ -2156,6 +2196,22 @@ function findAnimation(animationType, objectId) {
       return animation;
     }
   }
+}
+function findAnimationDisplacementRowcol(animationType, objectId) {
+  var dr = 0;
+  var dc = 0;
+  // skip the current one
+  for (var i = 1; i < animationQueue.length; i++) {
+    var animations = animationQueue[i];
+    animations.forEach(function(animation) {
+      if (animation[0] === animationType &&
+          animation[1] === objectId) {
+        dr += animation[2];
+        dc += animation[3];
+      }
+    });
+  }
+  return {r: -dr, c: -dc};
 }
 
 function previewPaste(hoverR, hoverC) {
