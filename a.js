@@ -1353,6 +1353,7 @@ function showEditorChanged() {
 
 function move(dr, dc) {
   animationQueue = [];
+  freshlyRemovedAnimatedObjects = [];
   animationStart = new Date().getTime();
   if (!isAlive()) return;
   var changeLog = [];
@@ -1436,14 +1437,20 @@ function move(dr, dc) {
     var fallingAnimations = [
       70 / Math.sqrt(fallHeight),
     ];
+    var exitAnimationQueue = [];
 
     // check for exit
     if (!isUneatenFruit()) {
       var snakes = getSnakes();
       for (var i = 0; i < snakes.length; i++) {
-        if (level.map[snakes[i].locations[0]] === EXIT) {
+        var snake = snakes[i];
+        if (level.map[snake.locations[0]] === EXIT) {
           // (one of) you made it!
-          removeObject(snakes[i], changeLog);
+          removeAnimatedObject(snake, changeLog);
+          exitAnimationQueue.push([
+            200,
+            [EXIT_SNAKE, snake.id, 0, 0],
+          ]);
           didAnything = true;
         }
       }
@@ -1471,9 +1478,17 @@ function move(dr, dc) {
           anySnakesDied = true;
         } else {
           // a box fell off the world
-          removeObject(object, changeLog);
+          removeAnimatedObject(object, changeLog);
           removeFromArray(fallingObjects, object);
         }
+        exitAnimationQueue.push([
+          200,
+          [
+            "d" + object.type, // DIE_BLOCK | DIE_SNAKE
+            object.id,
+            0, 0
+          ],
+        ]);
       });
       if (anySnakesDied) break;
     }
@@ -1483,7 +1498,8 @@ function move(dr, dc) {
     }
 
     if (!didAnything) break;
-    animationQueue.push(fallingAnimations);
+    Array.prototype.push.apply(animationQueue, exitAnimationQueue);
+    if (fallingAnimations.length > 1) animationQueue.push(fallingAnimations);
   }
 
   pushUndo(unmoveStuff, changeLog);
@@ -1636,6 +1652,10 @@ function removeAnyObjectAtLocation(location, changeLog) {
   var object = findObjectAtLocation(location);
   if (object != null) removeObject(object, changeLog);
 }
+function removeAnimatedObject(object, changeLog) {
+  removeObject(object, changeLog);
+  freshlyRemovedAnimatedObjects.push(object);
+}
 function removeObject(object, changeLog) {
   removeFromArray(level.objects, object);
   changeLog.push([object.type, object.id, [object.dead, copyArray(object.locations)], [0,[]]]);
@@ -1740,8 +1760,11 @@ var SLITHER_HEAD = "sh";
 var SLITHER_TAIL = "st";
 var MOVE_SNAKE = "ms";
 var MOVE_BLOCK = "mb";
-var TELEPORT_SNAKE = "ms";
-var TELEPORT_BLOCK = "mb";
+var TELEPORT_SNAKE = "ts";
+var TELEPORT_BLOCK = "tb";
+var EXIT_SNAKE = "es";
+var DIE_SNAKE = "ds";
+var DIE_BLOCK = "db";
 var animationQueue = [
   // // sequence of disjoint animation groups.
   // // each group completes before the next begins.
@@ -1758,6 +1781,7 @@ var animationQueue = [
 ];
 var animationStart = null; // new Date().getTime()
 var animationProgress; // 0.0 <= x < 1.0
+var freshlyRemovedAnimatedObjects = [];
 
 function render() {
   if (level == null) return;
@@ -1861,6 +1885,12 @@ function render() {
 
     // objects
     objects.forEach(drawObject);
+    freshlyRemovedAnimatedObjects.forEach(function(object) {
+      // the object needs to have a future removal animation, or else, it's gone already.
+      if (hasFutureRemoveAnimation(object)) {
+        drawObject(object);
+      }
+    });
 
     // banners
     if (countSnakes() === 0) {
@@ -2230,6 +2260,22 @@ function findAnimationDisplacementRowcol(objectType, objectId) {
     dc += movementAnimation[3] * (1 - animationProgress);
   }
   return {r: -dr, c: -dc};
+}
+function hasFutureRemoveAnimation(object) {
+  var animationTypes = [
+    EXIT_SNAKE,
+    DIE_BLOCK,
+  ];
+  for (var i = 0; i < animationQueue.length; i++) {
+    var animations = animationQueue[i];
+    for (var j = 1; j < animations.length; j++) {
+      var animation = animations[j];
+      if (animationTypes.indexOf(animation[0]) !== -1 &&
+          animation[1] === object.id) {
+        return true;
+      }
+    }
+  }
 }
 
 function previewPaste(hoverR, hoverC) {
