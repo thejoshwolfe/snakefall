@@ -2101,26 +2101,25 @@ function render() {
   function drawWall(r, c, adjacentTiles) {
     drawRect(r, c, "#844204"); // dirt
     context.fillStyle = "#282"; // grass
-    drawTileOutlines(r, c, isWall);
+    drawTileOutlines(r, c, isWall, 0.2);
 
     function isWall(dc, dr) {
       var tileCode = adjacentTiles[1 + dr][1 + dc];
       return tileCode == null || tileCode === WALL;
     }
   }
-  function drawTileOutlines(r, c, isOccupied) {
-    var grassSize = 0.2;
-    var complement = 1 - grassSize;
-    var grassPixels = grassSize * tileSize;
-    var complementPixels = (1 - 2 * grassSize) * tileSize;
-    if (!isOccupied(-1, -1)) context.fillRect((c)            * tileSize, (r)            * tileSize, grassPixels, grassPixels);
-    if (!isOccupied( 1, -1)) context.fillRect((c+complement) * tileSize, (r)            * tileSize, grassPixels, grassPixels);
-    if (!isOccupied(-1,  1)) context.fillRect((c)            * tileSize, (r+complement) * tileSize, grassPixels, grassPixels);
-    if (!isOccupied( 1,  1)) context.fillRect((c+complement) * tileSize, (r+complement) * tileSize, grassPixels, grassPixels);
-    if (!isOccupied( 0, -1)) context.fillRect((c)            * tileSize, (r)            * tileSize, tileSize, grassPixels);
-    if (!isOccupied( 0,  1)) context.fillRect((c)            * tileSize, (r+complement) * tileSize, tileSize, grassPixels);
-    if (!isOccupied(-1,  0)) context.fillRect((c)            * tileSize, (r)            * tileSize, grassPixels, tileSize);
-    if (!isOccupied( 1,  0)) context.fillRect((c+complement) * tileSize, (r)            * tileSize, grassPixels, tileSize);
+  function drawTileOutlines(r, c, isOccupied, outlineThickness) {
+    var complement = 1 - outlineThickness;
+    var outlinePixels = outlineThickness * tileSize;
+    var complementPixels = (1 - 2 * outlineThickness) * tileSize;
+    if (!isOccupied(-1, -1)) context.fillRect((c)            * tileSize, (r)            * tileSize, outlinePixels, outlinePixels);
+    if (!isOccupied( 1, -1)) context.fillRect((c+complement) * tileSize, (r)            * tileSize, outlinePixels, outlinePixels);
+    if (!isOccupied(-1,  1)) context.fillRect((c)            * tileSize, (r+complement) * tileSize, outlinePixels, outlinePixels);
+    if (!isOccupied( 1,  1)) context.fillRect((c+complement) * tileSize, (r+complement) * tileSize, outlinePixels, outlinePixels);
+    if (!isOccupied( 0, -1)) context.fillRect((c)            * tileSize, (r)            * tileSize, tileSize, outlinePixels);
+    if (!isOccupied( 0,  1)) context.fillRect((c)            * tileSize, (r+complement) * tileSize, tileSize, outlinePixels);
+    if (!isOccupied(-1,  0)) context.fillRect((c)            * tileSize, (r)            * tileSize, outlinePixels, tileSize);
+    if (!isOccupied( 1,  0)) context.fillRect((c+complement) * tileSize, (r)            * tileSize, outlinePixels, tileSize);
   }
   function drawSpikes(r, c) {
     var x = c * tileSize;
@@ -2172,7 +2171,7 @@ function render() {
       var r = rowcol.r + animationDisplacementRowcol.r;
       var c = rowcol.c + animationDisplacementRowcol.c;
       context.fillStyle = blockForeground[block.id % blockForeground.length];
-      drawTileOutlines(r, c, isAlsoThisBlock);
+      drawTileOutlines(r, c, isAlsoThisBlock, 0.3);
       function isAlsoThisBlock(dc, dr) {
         for (var i = 0; i < rowcols.length; i++) {
           var otherRowcol = rowcols[i];
