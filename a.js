@@ -1480,15 +1480,16 @@ function move(dr, dc) {
           // a box fell off the world
           removeAnimatedObject(object, changeLog);
           removeFromArray(fallingObjects, object);
+          exitAnimationQueue.push([
+            200,
+            [
+              DIE_BLOCK,
+              object.id,
+              0, 0
+            ],
+          ]);
+          didAnything = true;
         }
-        exitAnimationQueue.push([
-          200,
-          [
-            "d" + object.type, // DIE_BLOCK | DIE_SNAKE
-            object.id,
-            0, 0
-          ],
-        ]);
       });
       if (anySnakesDied) break;
     }
@@ -1853,7 +1854,14 @@ function render() {
 
   function renderLevel(onlyTheseObjects) {
     var objects = level.objects;
-    if (onlyTheseObjects != null) objects = onlyTheseObjects;
+    if (onlyTheseObjects != null) {
+      objects = onlyTheseObjects;
+    } else {
+      objects = level.objects.concat(freshlyRemovedAnimatedObjects.filter(function(object) {
+        // the object needs to have a future removal animation, or else, it's gone already.
+        return hasFutureRemoveAnimation(object);
+      }));
+    }
     // begin by rendering the background connections for blocks
     objects.forEach(function(object) {
       if (object.type !== "b") return;
@@ -1899,12 +1907,6 @@ function render() {
 
     // objects
     objects.forEach(drawObject);
-    freshlyRemovedAnimatedObjects.forEach(function(object) {
-      // the object needs to have a future removal animation, or else, it's gone already.
-      if (hasFutureRemoveAnimation(object)) {
-        drawObject(object);
-      }
-    });
 
     // banners
     if (countSnakes() === 0) {
