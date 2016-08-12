@@ -1751,7 +1751,6 @@ var snakeColors = [
   "#ff0",
 ];
 var blockForeground = ["#de5a6d","#fa65dd","#c367e3","#9c62fa","#625ff0"];
-var blockInside     = ["#b14857","#c850b0","#9c52b5","#7c4ec8","#4e4cc0"];
 var blockBackground = ["#853641","#963c84","#753d88","#5d3a96","#3a3990"];
 
 var activeSnakeId = null;
@@ -1859,6 +1858,20 @@ function render() {
     objects.forEach(function(object) {
       if (object.type !== "b") return;
       var animationDisplacementRowcol = findAnimationDisplacementRowcol(object.type, object.id);
+      // Make a stencil that excludes the insides of blocks.
+      // Then when we render the support beams, we won't see the supports inside the block itself.
+      context.save();
+      context.beginPath();
+      // Draw a path around the whole screen in the opposite direction as the rectangle paths below.
+      // This means that the below rectangles will be removing area from the greater rectangle.
+      context.rect(canvas.width, 0, -canvas.width, canvas.height);
+      for (var i = 0; i < object.locations.length; i++) {
+        var rowcol = getRowcol(level, object.locations[i]);
+        rowcol.r += animationDisplacementRowcol.r;
+        rowcol.c += animationDisplacementRowcol.c;
+        context.rect(rowcol.c * tileSize, rowcol.r * tileSize, tileSize, tileSize);
+      }
+      context.clip();
       for (var i = 0; i < object.locations.length - 1; i++) {
         var rowcol1 = getRowcol(level, object.locations[i]);
         rowcol1.r += animationDisplacementRowcol.r;
@@ -1870,6 +1883,7 @@ function render() {
         drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id % blockBackground.length]);
         drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id % blockBackground.length]);
       }
+      context.restore();
     });
 
     // terrain
@@ -2155,7 +2169,6 @@ function render() {
     rowcols.forEach(function(rowcol) {
       var r = rowcol.r + animationDisplacementRowcol.r;
       var c = rowcol.c + animationDisplacementRowcol.c;
-      drawRect(r, c, blockInside[block.id % blockInside.length]);
       context.fillStyle = blockForeground[block.id % blockForeground.length];
       drawTileOutlines(r, c, isAlsoThisBlock);
       function isAlsoThisBlock(dc, dr) {
