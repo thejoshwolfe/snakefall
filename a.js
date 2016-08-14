@@ -1750,6 +1750,14 @@ var snakeColors = [
   "#0f0",
   "#00f",
   "#ff0",
+  "#f0f",
+  "#0ff",
+  "#80f",
+  "#f80",
+  "#08f",
+  "#d7f",
+  "#093",
+  "#932"
 ];
 var blockForeground = ["#de5a6d","#fa65dd","#c367e3","#9c62fa","#625ff0"];
 var blockBackground = ["#853641","#963c84","#753d88","#5d3a96","#3a3990"];
