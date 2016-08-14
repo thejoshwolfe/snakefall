@@ -6,7 +6,12 @@ var SPIKE = 2;
 var FRUIT = 3;
 var EXIT = 4;
 var PORTAL = 5;
-var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT, PORTAL];
+var WOODPLATFORM = 6;
+var ONEWAYWALLU = 7;
+var ONEWAYWALLD = 8;
+var ONEWAYWALLL = 9;
+var ONEWAYWALLR = 10;
+var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT, PORTAL, WOODPLATFORM, ONEWAYWALLU, ONEWAYWALLD, ONEWAYWALLL, ONEWAYWALLR];
 
 var tileSize = 30;
 var level;
@@ -38,10 +43,10 @@ var exampleLevel = magicNumber + "&" +
     "0000000000000000000000000000000" +
     "0000000000000000000000000000000" +
     "0000000000000000000040000000000" +
-    "0000000000000110000000000000000" +
-    "0000000000000111100000000000000" +
-    "0000000000000011000000000000000" +
-    "0000000000000010003010000000000" +
+    "0000006008700110000000000000000" +
+    "0000000009000111100000000000000" +
+    "00000060:0700011000000000000000" +
+    "0000006607700010003010000000000" +
     "0000000000000010100011000300000" +
     "0000001111111000110000000110000" +
     "0000011111111111111111111110000" +
@@ -151,13 +156,17 @@ function parseLevel(string) {
   }
 }
 
+function serializeTileCode(tileCode) {
+  return String.fromCharCode(48 + tileCode); //48 is '0'
+}
+
 function stringifyLevel(level) {
   var output = magicNumber + "&";
   output += level.height + "&" + level.width + "\n";
 
   output += "?\n";
   for (var r = 0; r < level.height; r++) {
-    output += "  " + level.map.slice(r * level.width, (r + 1) * level.width).join("") + "\n";
+    output += "  " + level.map.slice(r * level.width, (r + 1) * level.width).map(serializeTileCode).join("") + "\n"; //problem line - turns int 10 into string "10" rather than into '0' + 10
   }
   output += "/\n";
 
@@ -504,7 +513,11 @@ var paintButtonIdAndTileCodes = [
   ["paintSpikeButton", SPIKE],
   ["paintExitButton", EXIT],
   ["paintFruitButton", FRUIT],
-  ["paintPortalButton", PORTAL],
+  ["paintWoodPlatformButton", WOODPLATFORM],
+  ["paintOneWayWallUButton", ONEWAYWALLU],
+  ["paintOneWayWallDButton", ONEWAYWALLD],
+  ["paintOneWayWallLButton", ONEWAYWALLL],
+  ["paintOneWayWallRButton", ONEWAYWALLR],
   ["paintSnakeButton", "s"],
   ["paintBlockButton", "b"],
 ];
@@ -1268,6 +1281,11 @@ function describe(arg1, arg2) {
       case FRUIT: return "Fruit";
       case EXIT:  return "an Exit";
       case PORTAL:  return "a Portal";
+      case WOODPLATFORM: return "a Wooden Platform";
+      case ONEWAYWALLU: return "A One Way Wall (facing U)";
+      case ONEWAYWALLD: return "A One Way Wall (facing D)";
+      case ONEWAYWALLL: return "A One Way Wall (facing L)";
+      case ONEWAYWALLR: return "A One Way Wall (facing R)";
       default: throw asdf;
     }
   }
@@ -1278,11 +1296,11 @@ function describe(arg1, arg2) {
         case "#0f0": return " (Green)";
         case "#00f": return " (Blue)";
         case "#ff0": return " (Yellow)";
-	    case "#f0f": return " (Magenta)";
+        case "#f0f": return " (Magenta)";
         case "#0ff": return " (Cyan)";
         case "#80f": return " (Purple)";
         case "#f80": return " (Orange)";
-	    case "#08f": return " (Azure)";
+        case "#08f": return " (Azure)";
         case "#d7f": return " (Pink)";
         case "#093": return " (Emerald)";
         case "#932": return " (Brown)";
@@ -1380,7 +1398,7 @@ function move(dr, dc) {
       // eat
       paintTileAtLocation(newLocation, SPACE, changeLog);
       ate = true;
-    } else if (isTileCodeAir(newTile)) {
+    } else if (isTileCodeAir(activeSnake, null, newTile, dr, dc)) {
       var otherObject = findObjectAtLocation(newLocation);
       if (otherObject != null) {
         if (otherObject === activeSnake) return; // can't push yourself
@@ -1549,9 +1567,8 @@ function checkMovement(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects
           return false;
         }
         addIfNotPresent(pushedObjects, yetAnotherObject);
-      } else {
-        addIfNotPresent(forwardLocations, forwardLocation);
       }
+      addIfNotPresent(forwardLocations, forwardLocation);
     }
   }
   // check forward locations
@@ -1561,14 +1578,14 @@ function checkMovement(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects
     // but that means the tile must be air,
     // and we already know pushing that object.
     var tileCode = level.map[forwardLocation];
-    if (!isTileCodeAir(tileCode)) {
+    var object = findObjectAtLocation(offsetLocation(forwardLocation, -dr, -dc));
+    if (!isTileCodeAir(pusher, object, tileCode, dr, dc)) {
       if (dyingObjects != null) {
         if (tileCode === SPIKE) {
           // uh... which object was this again?
-          var deadObject = findObjectAtLocation(offsetLocation(forwardLocation, -dr, -dc));
-          if (deadObject.type === "s") {
+          if (object.type === "s") {
             // ouch!
-            addIfNotPresent(dyingObjects, deadObject);
+            addIfNotPresent(dyingObjects, object);
             continue;
           }
         }
@@ -1631,26 +1648,30 @@ function activatePortal(portalLocations, portalLocation, animations, changeLog) 
 
   for (var i = 0; i < newLocations.length; i++) {
     var location = newLocations[i];
-    if (!isTileCodeAir(level.map[location])) return false; // blocked by tile
+    if (!isTileCodeAir(object, null, level.map[location], 0, 0)) return; // blocked by tile
     var otherObject = findObjectAtLocation(location);
-    if (otherObject != null && otherObject !== object) return false; // blocked by object
+    if (otherObject != null && otherObject !== object) return; // blocked by object
   }
 
   // zappo presto!
   var oldState = serializeObjectState(object);
   object.locations = newLocations;
   changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
-  animations.push([
-    "t" + object.type, // TELEPORT_SNAKE | TELEPORT_BLOCK
-    object.id,
-    delta.r,
-    delta.c,
-  ]);
-  return true;
 }
 
-function isTileCodeAir(tileCode) {
-  return tileCode === SPACE || tileCode === EXIT || tileCode === PORTAL;
+function isTileCodeAir(pusher, pushedObject, tileCode, dr, dc) {
+  switch (tileCode)
+  {
+    case SPACE: return true;
+    case EXIT: return true;
+    case PORTAL: return true;
+    case WOODPLATFORM: return pusher != null;
+    case ONEWAYWALLU: return dr != 1;
+    case ONEWAYWALLD: return dr != -1;
+    case ONEWAYWALLL: return dc != 1;
+    case ONEWAYWALLR: return dc != -1;
+    default: return false;
+  }
 }
 
 function addIfNotPresent(array, element) {
@@ -2006,6 +2027,21 @@ function render() {
         drawCircle(r, c, 0.6, "#111");
         if (activePortalLocations.indexOf(location) !== -1) drawCircle(r, c, 0.3, "#666");
         break;
+      case WOODPLATFORM:
+        drawOneWayWall("#D38345", r, c, -1, 0);
+        break;
+      case ONEWAYWALLU:
+        drawOneWayWall("#BACFD1", r, c, -1, 0);
+        break;
+      case ONEWAYWALLD:
+        drawOneWayWall("#BACFD1", r, c, 1, 0);
+        break;
+      case ONEWAYWALLL:
+        drawOneWayWall("#BACFD1", r, c, 0, -1);
+        break;
+      case ONEWAYWALLR:
+        drawOneWayWall("#BACFD1", r, c, 0, 1);
+        break;
       default: throw asdf;
     }
     function getAdjacentTiles() {
@@ -2112,6 +2148,66 @@ function render() {
         break;
       default: throw asdf;
     }
+  }
+
+  function drawOneWayWall(fillStyle, r, c, dr, dc) {
+    context.fillStyle = fillStyle;
+	if (dr == -1)
+	{
+      context.fillRect(c * tileSize - 2, r * tileSize - 2, tileSize + 4, tileSize/4 + 4);
+	}
+	else if (dr == 1)
+	{
+	  context.fillRect(c * tileSize - 2, (r + 1) * tileSize - 2 - tileSize/4, tileSize + 4, tileSize/4 + 4);
+	}
+	else if (dc == -1)
+	{
+	  context.fillRect(c * tileSize - 2, r * tileSize - 2, tileSize/4 + 4, tileSize + 4);
+	}
+	else if (dc == 1)
+	{
+	  context.fillRect((c + 1) * tileSize - 2 - tileSize/4, r * tileSize - 2, tileSize/4 + 4, tileSize + 4);
+	}
+	
+	context.lineWidth = 3;
+	context.strokeStyle = "#777";
+	context.beginPath();
+	
+	if (dr == -1)
+	{
+	  context.moveTo(c * tileSize, r * tileSize + tileSize/2);
+	  context.lineTo(c * tileSize + tileSize/4, r * tileSize + tileSize/4);
+	  context.stroke();
+	  context.moveTo(c * tileSize + 3*tileSize/4, r * tileSize + tileSize/4);
+	  context.lineTo(c * tileSize + tileSize, r * tileSize + tileSize/2);
+	}
+	else if (dr == 1)
+	{
+	  context.moveTo(c * tileSize, r * tileSize + tileSize/2);
+	  context.lineTo(c * tileSize + tileSize/4, r * tileSize + 3*tileSize/4);
+	  context.stroke();
+	  context.moveTo(c * tileSize + 3*tileSize/4, r * tileSize + 3*tileSize/4);
+	  context.lineTo(c * tileSize + tileSize, r * tileSize + tileSize/2);
+	}
+	else if (dc == -1)
+	{
+	  context.moveTo(c * tileSize + tileSize/2, r * tileSize);
+	  context.lineTo(c * tileSize + tileSize/4, r * tileSize + tileSize/4);
+	  context.stroke();
+	  context.moveTo(c * tileSize + tileSize/4, r * tileSize + 3*tileSize/4);
+	  context.lineTo(c * tileSize + tileSize/2, r * tileSize + tileSize);
+	}
+    else if (dc == 1)
+	{
+	  context.moveTo(c * tileSize + tileSize/2, r * tileSize);
+	  context.lineTo(c * tileSize + 3*tileSize/4, r * tileSize + tileSize/4);
+	  context.stroke();
+	  context.moveTo(c * tileSize + 3*tileSize/4, r * tileSize + 3*tileSize/4);
+	  context.lineTo(c * tileSize + tileSize/2, r * tileSize + tileSize);
+	}
+	
+	context.stroke();
+	context.lineWidth = 0;
   }
 
   function drawWall(r, c, adjacentTiles) {
