@@ -11,7 +11,9 @@ var ONEWAYWALLU = 7;
 var ONEWAYWALLD = 8;
 var ONEWAYWALLL = 9;
 var ONEWAYWALLR = 10;
-var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT, PORTAL, WOODPLATFORM, ONEWAYWALLU, ONEWAYWALLD, ONEWAYWALLL, ONEWAYWALLR];
+var FOAM = 11;
+var DIGGABLEDIRT = 12;
+var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT, PORTAL, WOODPLATFORM, ONEWAYWALLU, ONEWAYWALLD, ONEWAYWALLL, ONEWAYWALLR, FOAM, DIGGABLEDIRT];
 
 var tileSize = 30;
 var level;
@@ -43,8 +45,8 @@ var exampleLevel = magicNumber + "&" +
     "0000000000000000000000000000000" +
     "0000000000000000000000000000000" +
     "0000000000000000000040000000000" +
-    "0000006008700110000000000000000" +
-    "0000000009000111100000000000000" +
+    "0000066008700110000000000000000" +
+    "0000000;<9000111100000000000000" +
     "00000060:0700011000000000000000" +
     "0000006607700010003010000000000" +
     "0000000000000010100011000300000" +
@@ -54,7 +56,8 @@ var exampleLevel = magicNumber + "&" +
     "0000001111111100111111111100000" +
     "0000001111111000111111111100000" +
   "/" +
-  "s0 ?351&350&349/";
+  "s0 ?351&350&349/" + 
+  "b0 ?192/";
 
 function parseLevel(string) {
   // magic number
@@ -518,6 +521,8 @@ var paintButtonIdAndTileCodes = [
   ["paintOneWayWallDButton", ONEWAYWALLD],
   ["paintOneWayWallLButton", ONEWAYWALLL],
   ["paintOneWayWallRButton", ONEWAYWALLR],
+  ["paintFoamButton", FOAM],
+  ["paintDiggableDirtButton", DIGGABLEDIRT],
   ["paintSnakeButton", "s"],
   ["paintBlockButton", "b"],
 ];
@@ -1286,6 +1291,8 @@ function describe(arg1, arg2) {
       case ONEWAYWALLD: return "A One Way Wall (facing D)";
       case ONEWAYWALLL: return "A One Way Wall (facing L)";
       case ONEWAYWALLR: return "A One Way Wall (facing R)";
+      case FOAM: return "Foam";
+      case DIGGABLEDIRT: return "Diggable Dirt";
       default: throw asdf;
     }
   }
@@ -1398,7 +1405,11 @@ function move(dr, dc) {
       // eat
       paintTileAtLocation(newLocation, SPACE, changeLog);
       ate = true;
-    } else if (isTileCodeAir(activeSnake, null, newTile, dr, dc)) {
+    } else if (newTile === DIGGABLEDIRT || newTile === FOAM) {
+      // dig
+      paintTileAtLocation(newLocation, SPACE, changeLog);
+    }
+    else if (isTileCodeAir(activeSnake, null, newTile, dr, dc)) {
       var otherObject = findObjectAtLocation(newLocation);
       if (otherObject != null) {
         if (otherObject === activeSnake) return; // can't push yourself
@@ -1610,6 +1621,10 @@ function moveObjects(objects, dr, dc, portalLocations, portalActivationLocations
     var oldPortals = getSetIntersection(portalLocations, object.locations);
     for (var i = 0; i < object.locations.length; i++) {
       object.locations[i] = offsetLocation(object.locations[i], dr, dc);
+      if (level.map[object.locations[i]] == FOAM)
+      {
+        paintTileAtLocation(object.locations[i], SPACE, changeLog);
+      }
     }
     changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
     animations.push([
@@ -1665,7 +1680,7 @@ function isTileCodeAir(pusher, pushedObject, tileCode, dr, dc) {
     case SPACE: return true;
     case EXIT: return true;
     case PORTAL: return true;
-    case WOODPLATFORM: return pusher != null;
+    case WOODPLATFORM: case FOAM: return pusher != null;
     case ONEWAYWALLU: return dr != 1;
     case ONEWAYWALLD: return dr != -1;
     case ONEWAYWALLL: return dc != 1;
@@ -2042,6 +2057,12 @@ function render() {
       case ONEWAYWALLR:
         drawOneWayWall("#BACFD1", r, c, 0, 1);
         break;
+      case FOAM:
+        drawFoam(r, c);
+        break;
+      case DIGGABLEDIRT:
+        drawDiggableDirt(r, c);
+        break;
       default: throw asdf;
     }
     function getAdjacentTiles() {
@@ -2152,62 +2173,87 @@ function render() {
 
   function drawOneWayWall(fillStyle, r, c, dr, dc) {
     context.fillStyle = fillStyle;
-	if (dr == -1)
-	{
+    if (dr == -1)
+    {
       context.fillRect(c * tileSize - 2, r * tileSize - 2, tileSize + 4, tileSize/4 + 4);
-	}
-	else if (dr == 1)
-	{
-	  context.fillRect(c * tileSize - 2, (r + 1) * tileSize - 2 - tileSize/4, tileSize + 4, tileSize/4 + 4);
-	}
-	else if (dc == -1)
-	{
-	  context.fillRect(c * tileSize - 2, r * tileSize - 2, tileSize/4 + 4, tileSize + 4);
-	}
-	else if (dc == 1)
-	{
-	  context.fillRect((c + 1) * tileSize - 2 - tileSize/4, r * tileSize - 2, tileSize/4 + 4, tileSize + 4);
-	}
-	
-	context.lineWidth = 3;
-	context.strokeStyle = "#777";
-	context.beginPath();
-	
-	if (dr == -1)
-	{
-	  context.moveTo(c * tileSize, r * tileSize + tileSize/2);
-	  context.lineTo(c * tileSize + tileSize/4, r * tileSize + tileSize/4);
-	  context.stroke();
-	  context.moveTo(c * tileSize + 3*tileSize/4, r * tileSize + tileSize/4);
-	  context.lineTo(c * tileSize + tileSize, r * tileSize + tileSize/2);
-	}
-	else if (dr == 1)
-	{
-	  context.moveTo(c * tileSize, r * tileSize + tileSize/2);
-	  context.lineTo(c * tileSize + tileSize/4, r * tileSize + 3*tileSize/4);
-	  context.stroke();
-	  context.moveTo(c * tileSize + 3*tileSize/4, r * tileSize + 3*tileSize/4);
-	  context.lineTo(c * tileSize + tileSize, r * tileSize + tileSize/2);
-	}
-	else if (dc == -1)
-	{
-	  context.moveTo(c * tileSize + tileSize/2, r * tileSize);
-	  context.lineTo(c * tileSize + tileSize/4, r * tileSize + tileSize/4);
-	  context.stroke();
-	  context.moveTo(c * tileSize + tileSize/4, r * tileSize + 3*tileSize/4);
-	  context.lineTo(c * tileSize + tileSize/2, r * tileSize + tileSize);
-	}
+    }
+    else if (dr == 1)
+    {
+      context.fillRect(c * tileSize - 2, (r + 1) * tileSize - 2 - tileSize/4, tileSize + 4, tileSize/4 + 4);
+    }
+    else if (dc == -1)
+    {
+      context.fillRect(c * tileSize - 2, r * tileSize - 2, tileSize/4 + 4, tileSize + 4);
+    }
     else if (dc == 1)
-	{
-	  context.moveTo(c * tileSize + tileSize/2, r * tileSize);
-	  context.lineTo(c * tileSize + 3*tileSize/4, r * tileSize + tileSize/4);
-	  context.stroke();
-	  context.moveTo(c * tileSize + 3*tileSize/4, r * tileSize + 3*tileSize/4);
-	  context.lineTo(c * tileSize + tileSize/2, r * tileSize + tileSize);
-	}
-	
-	context.stroke();
-	context.lineWidth = 0;
+    {
+      context.fillRect((c + 1) * tileSize - 2 - tileSize/4, r * tileSize - 2, tileSize/4 + 4, tileSize + 4);
+    }
+    
+    context.lineWidth = 3;
+    context.strokeStyle = "#777";
+    context.beginPath();
+    
+    if (dr == -1)
+    {
+      context.moveTo(c * tileSize, r * tileSize + tileSize/2);
+      context.lineTo(c * tileSize + tileSize/4, r * tileSize + tileSize/4);
+      context.stroke();
+      context.moveTo(c * tileSize + 3*tileSize/4, r * tileSize + tileSize/4);
+      context.lineTo(c * tileSize + tileSize, r * tileSize + tileSize/2);
+    }
+    else if (dr == 1)
+    {
+      context.moveTo(c * tileSize, r * tileSize + tileSize/2);
+      context.lineTo(c * tileSize + tileSize/4, r * tileSize + 3*tileSize/4);
+      context.stroke();
+      context.moveTo(c * tileSize + 3*tileSize/4, r * tileSize + 3*tileSize/4);
+      context.lineTo(c * tileSize + tileSize, r * tileSize + tileSize/2);
+    }
+    else if (dc == -1)
+    {
+      context.moveTo(c * tileSize + tileSize/2, r * tileSize);
+      context.lineTo(c * tileSize + tileSize/4, r * tileSize + tileSize/4);
+      context.stroke();
+      context.moveTo(c * tileSize + tileSize/4, r * tileSize + 3*tileSize/4);
+      context.lineTo(c * tileSize + tileSize/2, r * tileSize + tileSize);
+    }
+    else if (dc == 1)
+    {
+      context.moveTo(c * tileSize + tileSize/2, r * tileSize);
+      context.lineTo(c * tileSize + 3*tileSize/4, r * tileSize + tileSize/4);
+      context.stroke();
+      context.moveTo(c * tileSize + 3*tileSize/4, r * tileSize + 3*tileSize/4);
+      context.lineTo(c * tileSize + tileSize/2, r * tileSize + tileSize);
+    }
+    
+    context.stroke();
+    context.lineWidth = 0;
+  }
+  
+  function drawFoam(r, c) {
+    context.fillStyle = "#6BDBC8";
+    for (var i = 0; i < 3; ++i)
+    {
+      for (var j = 0; j < 3; ++j)
+      {
+        context.beginPath();
+        context.arc(c*tileSize + (i*2+1)*tileSize/6, r*tileSize + (j*2+1)*tileSize/6, tileSize/6, 0, 2*Math.PI);
+        context.fill();
+      }
+    }
+  }
+  
+  function drawDiggableDirt(r, c) {
+    drawRect(r, c, "#d37c2a");
+    context.fillStyle = "#844204";
+    context.beginPath();
+    context.moveTo(c*tileSize + tileSize/2, r*tileSize);
+    context.lineTo((c+1)*tileSize, r*tileSize + tileSize/2);
+    context.lineTo(c*tileSize + tileSize/2, (r+1)*tileSize);
+    context.lineTo(c*tileSize, r*tileSize + tileSize/2);
+    context.lineTo(c*tileSize + tileSize/2, r*tileSize);
+    context.fill();
   }
 
   function drawWall(r, c, adjacentTiles) {
