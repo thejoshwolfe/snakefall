@@ -13,7 +13,9 @@ var ONEWAYWALLL = 9;
 var ONEWAYWALLR = 10;
 var FOAM = 11;
 var DIGGABLEDIRT = 12;
-var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT, PORTAL, WOODPLATFORM, ONEWAYWALLU, ONEWAYWALLD, ONEWAYWALLL, ONEWAYWALLR, FOAM, DIGGABLEDIRT];
+var OPENGATE = 13;
+var CLOSEDGATE = 14;
+var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT, PORTAL, WOODPLATFORM, ONEWAYWALLU, ONEWAYWALLD, ONEWAYWALLL, ONEWAYWALLR, FOAM, DIGGABLEDIRT, OPENGATE, CLOSEDGATE];
 
 var tileSize = 30;
 var level;
@@ -43,10 +45,10 @@ var exampleLevel = magicNumber + "&" +
     "0000000000000000000000000000000" +
     "0000000000000000000000000000000" +
     "0000000000000000000000000000000" +
-    "0000000000000000000000000000000" +
-    "0000000000000000000040000000000" +
-    "0000066008700110000000000000000" +
-    "0000000;<9000111100000000000000" +
+    "0000000000000>>0000000000000000" +
+    "0000000000000==0000040000000000" +
+    "0000066008700110500000000000000" +
+    "0000000;<900011110005;=00000000" +
     "00000060:0700011000000000000000" +
     "0000006607700010003010000000000" +
     "0000000000000010100011000300000" +
@@ -516,6 +518,7 @@ var paintButtonIdAndTileCodes = [
   ["paintSpikeButton", SPIKE],
   ["paintExitButton", EXIT],
   ["paintFruitButton", FRUIT],
+  ["paintPortalButton", PORTAL],
   ["paintWoodPlatformButton", WOODPLATFORM],
   ["paintOneWayWallUButton", ONEWAYWALLU],
   ["paintOneWayWallDButton", ONEWAYWALLD],
@@ -523,6 +526,8 @@ var paintButtonIdAndTileCodes = [
   ["paintOneWayWallRButton", ONEWAYWALLR],
   ["paintFoamButton", FOAM],
   ["paintDiggableDirtButton", DIGGABLEDIRT],
+  ["paintOpenGateButton", OPENGATE],
+  ["paintClosedGateButton", CLOSEDGATE],
   ["paintSnakeButton", "s"],
   ["paintBlockButton", "b"],
 ];
@@ -1293,6 +1298,8 @@ function describe(arg1, arg2) {
       case ONEWAYWALLR: return "A One Way Wall (facing R)";
       case FOAM: return "Foam";
       case DIGGABLEDIRT: return "Diggable Dirt";
+      case OPENGATE: return "An Open Gate";
+      case CLOSEDGATE: return "A Closed Gate";
       default: throw asdf;
     }
   }
@@ -1398,6 +1405,9 @@ function move(dr, dc) {
 
   var ate = false;
   var pushedObjects = [];
+  
+  //track OpenGates that had objects on them
+  var occupiedOpenGates = getOccupiedOpenGateLocations();
 
   if (isCollision()) {
     var newTile = level.map[newLocation];
@@ -1459,6 +1469,8 @@ function move(dr, dc) {
   moveObjects(pushedObjects, dr, dc, portalLocations, portalActivationLocations, changeLog, slitherAnimations);
   animationQueue.push(slitherAnimations);
 
+  occupiedOpenGates = combineOldAndNewGateOccupations(occupiedOpenGates);
+  
   // gravity loop
   if (isGravity()) for (var fallHeight = 1;; fallHeight++) {
     // do portals separate from falling logic
@@ -1492,6 +1504,8 @@ function move(dr, dc) {
         }
       }
     }
+    
+    occupiedOpenGates = combineOldAndNewGateOccupations(occupiedOpenGates);
 
     // fall
     var dyingObjects = [];
@@ -1535,6 +1549,8 @@ function move(dr, dc) {
       didAnything = true;
     }
 
+    occupiedOpenGates = closeGates(occupiedOpenGates, changeLog);
+    
     if (!didAnything) break;
     Array.prototype.push.apply(animationQueue, exitAnimationQueue);
     if (fallingAnimations.length > 1) animationQueue.push(fallingAnimations);
@@ -1542,6 +1558,23 @@ function move(dr, dc) {
 
   pushUndo(unmoveStuff, changeLog);
   render();
+}
+
+function combineOldAndNewGateOccupations(oldOccupiedOpenGates)
+{
+  var newOccupiedOpenGates = getOccupiedOpenGateLocations();
+  var newlyOccupiedOpenGates = getSetSubtract(newOccupiedOpenGates, oldOccupiedOpenGates);
+  return oldOccupiedOpenGates.concat(newlyOccupiedOpenGates);
+}
+
+function closeGates(oldOccupiedOpenGates, changeLog)
+{
+  var newOccupiedOpenGates = getOccupiedOpenGateLocations();
+  var nowUnoccupiedOpenGates = getSetSubtract(oldOccupiedOpenGates, newOccupiedOpenGates);
+  for (var i = 0; i < nowUnoccupiedOpenGates.length; i++) {
+    paintTileAtLocation(nowUnoccupiedOpenGates[i], CLOSEDGATE, changeLog);
+  }
+  return newOccupiedOpenGates;
 }
 
 function checkMovement(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects) {
@@ -1671,15 +1704,21 @@ function activatePortal(portalLocations, portalLocation, animations, changeLog) 
   // zappo presto!
   var oldState = serializeObjectState(object);
   object.locations = newLocations;
+  for (var i = 0; i < newLocations.length; i++) {
+    var location = newLocations[i];
+    if (level.map[location] == FOAM)
+    {
+      //dig
+      paintTileAtLocation(location, SPACE, changeLog);
+    }
+  }
   changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
 }
 
 function isTileCodeAir(pusher, pushedObject, tileCode, dr, dc) {
   switch (tileCode)
   {
-    case SPACE: return true;
-    case EXIT: return true;
-    case PORTAL: return true;
+    case SPACE: case EXIT: case PORTAL: case OPENGATE: return true;
     case WOODPLATFORM: case FOAM: return pusher != null;
     case ONEWAYWALLU: return dr != 1;
     case ONEWAYWALLD: return dr != -1;
@@ -1758,6 +1797,17 @@ function getActivePortalLocations() {
   var portalLocations = getPortalLocations();
   if (portalLocations.length !== 2) return []; // nice try
   return portalLocations;
+}
+function getOccupiedOpenGateLocations()
+{
+  var result = [];
+  for (var i = 0; i < level.map.length; i++) {
+    if (level.map[i] === OPENGATE) {
+      if (findObjectAtLocation(i))
+          result.push(i);
+    }
+  }
+  return result;
 }
 function getPortalLocations() {
   var result = [];
@@ -2063,6 +2113,12 @@ function render() {
       case DIGGABLEDIRT:
         drawDiggableDirt(r, c);
         break;
+      case OPENGATE:
+        drawGate(r, c, false);
+        break;
+      case CLOSEDGATE:
+        drawGate(r, c, true);
+        break;
       default: throw asdf;
     }
     function getAdjacentTiles() {
@@ -2175,19 +2231,19 @@ function render() {
     context.fillStyle = fillStyle;
     if (dr == -1)
     {
-      context.fillRect(c * tileSize - 2, r * tileSize - 2, tileSize + 4, tileSize/4 + 4);
+      context.fillRect(c * tileSize - tileSize/15, r * tileSize - tileSize/15, tileSize + 2*tileSize/15, tileSize/4 + 2*tileSize/15);
     }
     else if (dr == 1)
     {
-      context.fillRect(c * tileSize - 2, (r + 1) * tileSize - 2 - tileSize/4, tileSize + 4, tileSize/4 + 4);
+      context.fillRect(c * tileSize - tileSize/15, (r + 1) * tileSize - tileSize/15 - tileSize/4, tileSize + 2*tileSize/15, tileSize/4 + 2*tileSize/15);
     }
     else if (dc == -1)
     {
-      context.fillRect(c * tileSize - 2, r * tileSize - 2, tileSize/4 + 4, tileSize + 4);
+      context.fillRect(c * tileSize - tileSize/15, r * tileSize - tileSize/15, tileSize/4 + 2*tileSize/15, tileSize + 2*tileSize/15);
     }
     else if (dc == 1)
     {
-      context.fillRect((c + 1) * tileSize - 2 - tileSize/4, r * tileSize - 2, tileSize/4 + 4, tileSize + 4);
+      context.fillRect((c + 1) * tileSize - tileSize/15 - tileSize/4, r * tileSize - tileSize/15, tileSize/4 + 2*tileSize/15, tileSize + 2*tileSize/15);
     }
     
     context.lineWidth = 3;
@@ -2233,10 +2289,8 @@ function render() {
   
   function drawFoam(r, c) {
     context.fillStyle = "#6BDBC8";
-    for (var i = 0; i < 3; ++i)
-    {
-      for (var j = 0; j < 3; ++j)
-      {
+    for (var i = 0; i < 3; i++) {
+      for (var j = 0; j < 3; j++) {
         context.beginPath();
         context.arc(c*tileSize + (i*2+1)*tileSize/6, r*tileSize + (j*2+1)*tileSize/6, tileSize/6, 0, 2*Math.PI);
         context.fill();
@@ -2256,6 +2310,43 @@ function render() {
     context.fill();
   }
 
+  function drawGate(r, c, isClosed) {
+    if (isClosed)
+    {
+      context.lineWidth = 3;
+      context.strokeStyle = "#444";
+      context.beginPath();
+      for (var i = 1; i < 3; i++) {
+        context.beginPath();
+        context.moveTo(c*tileSize + i*tileSize/3, r*tileSize);
+        context.lineTo(c*tileSize + i*tileSize/3, (r+1)*tileSize);
+        context.stroke();
+      }
+      
+      for (var i = 1; i < 4; i++) {
+        context.beginPath();
+        context.moveTo(c*tileSize, r*tileSize + i*tileSize/4 + tileSize/15);
+        context.lineTo((c+1)*tileSize, r*tileSize + i*tileSize/4 + tileSize/15);
+        context.stroke();
+      }
+      
+      context.lineWidth = 0;
+    }
+    
+    context.fillStyle = "#777";
+    context.beginPath();
+    context.moveTo(c*tileSize, r*tileSize);
+    context.lineTo((c+1)*tileSize, r*tileSize);
+    context.lineTo((c+1)*tileSize, (r+1)*tileSize);
+    context.lineTo(c*tileSize + 5*tileSize/6, (r+1)*tileSize);
+    context.lineTo(c*tileSize + 5*tileSize/6, r*tileSize + tileSize/2);
+    context.arc(c*tileSize + tileSize/2, r*tileSize + tileSize/2, tileSize/3, 0, Math.PI, true);
+    context.lineTo(c*tileSize + 1*tileSize/6, (r+1)*tileSize);
+    context.lineTo(c*tileSize, (r+1)*tileSize);
+    context.lineTo(c*tileSize, r*tileSize);
+    context.fill();
+  }
+  
   function drawWall(r, c, adjacentTiles) {
     drawRect(r, c, "#844204"); // dirt
     context.fillStyle = "#282"; // grass
@@ -2537,6 +2628,10 @@ function copyArray(array) {
 function getSetIntersection(array1, array2) {
   if (array1.length * array2.length === 0) return [];
   return array1.filter(function(x) { return array2.indexOf(x) !== -1; });
+}
+function getSetSubtract(array1, array2) {
+  if (array1.length === 0) return [];
+  return array1.filter(function(x) { return array2.indexOf(x) == -1; });
 }
 function makeScaleCoordinatesFunction(width1, width2) {
   return function(location) {
