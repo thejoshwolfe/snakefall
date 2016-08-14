@@ -1278,6 +1278,14 @@ function describe(arg1, arg2) {
         case "#0f0": return " (Green)";
         case "#00f": return " (Blue)";
         case "#ff0": return " (Yellow)";
+	    case "#f0f": return " (Magenta)";
+        case "#0ff": return " (Cyan)";
+        case "#80f": return " (Purple)";
+        case "#f80": return " (Orange)";
+	    case "#08f": return " (Azure)";
+        case "#d7f": return " (Pink)";
+        case "#093": return " (Emerald)";
+        case "#932": return " (Brown)";
         default: throw asdf;
       }
     })();
