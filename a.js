@@ -4,21 +4,21 @@ if (typeof VERSION !== "undefined") {
 }
 var canvas = document.getElementById("canvas");
 
-var SPACE = 0;
-var WALL = 1;
-var SPIKE = 2;
-var FRUIT = 3;
-var EXIT = 4;
-var PORTAL = 5;
-var WOODPLATFORM = 6;
-var ONEWAYWALLU = 7;
-var ONEWAYWALLD = 8;
-var ONEWAYWALLL = 9;
-var ONEWAYWALLR = 10;
-var FOAM = 11;
-var DIGGABLEDIRT = 12;
-var OPENGATE = 13;
-var CLOSEDGATE = 14;
+var SPACE = "0".charCodeAt(0);
+var WALL = "1".charCodeAt(0);
+var SPIKE = "2".charCodeAt(0);
+var FRUIT = "3".charCodeAt(0);
+var EXIT = "4".charCodeAt(0);
+var PORTAL = "5".charCodeAt(0);
+var WOODPLATFORM = "w".charCodeAt(0);
+var ONEWAYWALLU = "u".charCodeAt(0);
+var ONEWAYWALLD = "d".charCodeAt(0);
+var ONEWAYWALLL = "l".charCodeAt(0);
+var ONEWAYWALLR = "r".charCodeAt(0);
+var FOAM = "f".charCodeAt(0);
+var DIGGABLEDIRT = "t".charCodeAt(0);
+var OPENGATE = "o".charCodeAt(0);
+var CLOSEDGATE = "c".charCodeAt(0);
 var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT, PORTAL, WOODPLATFORM, ONEWAYWALLU, ONEWAYWALLD, ONEWAYWALLL, ONEWAYWALLR, FOAM, DIGGABLEDIRT, OPENGATE, CLOSEDGATE];
 
 var tileSize = 30;
@@ -49,12 +49,12 @@ var exampleLevel = magicNumber + "&" +
     "0000000000000000000000000000000" +
     "0000000000000000000000000000000" +
     "0000000000000000000000000000000" +
-    "0000000000000>>0000000000000000" +
-    "0000000000000==0000040000000000" +
-    "0000066008700110500000000000000" +
-    "0000000;<900011110005;=00000000" +
-    "00000060:0700011000000000000000" +
-    "0000006607700010003010000000000" +
+    "0000000000000cc0000000000000000" +
+    "0000000000000oo0000040000000000" +
+    "00000ww00du00110500000000000000" +
+    "0000000ftl00011110005fo00000000" +
+    "000000w0r0u00011000000000000000" +
+    "000000ww0uu00010003010000000000" +
     "0000000000000010100011000300000" +
     "0000001111111000110000000110000" +
     "0000011111111111111111111110000" +
@@ -90,7 +90,7 @@ function parseLevel(string) {
   mapData = decompressSerialization(mapData);
   if (level.height * level.width !== mapData.length) throw parserError("height, width, and map.length do not jive");
   for (var i = 0; i < mapData.length; i++) {
-    var tileCode = mapData[i].charCodeAt(0) - "0".charCodeAt(0);
+    var tileCode = mapData[i].charCodeAt(0);
     if (validTileCodes.indexOf(tileCode) === -1) throw parserError("invalid tilecode: " + JSON.stringify(mapData[i]));
     level.map.push(tileCode);
   }
@@ -166,7 +166,7 @@ function parseLevel(string) {
 }
 
 function serializeTileCode(tileCode) {
-  return String.fromCharCode(48 + tileCode); //48 is '0'
+  return String.fromCharCode(tileCode);
 }
 
 function stringifyLevel(level) {
@@ -175,7 +175,7 @@ function stringifyLevel(level) {
 
   output += "?\n";
   for (var r = 0; r < level.height; r++) {
-    output += "  " + level.map.slice(r * level.width, (r + 1) * level.width).map(serializeTileCode).join("") + "\n"; //problem line - turns int 10 into string "10" rather than into '0' + 10
+    output += "  " + level.map.slice(r * level.width, (r + 1) * level.width).map(serializeTileCode).join("") + "\n";
   }
   output += "/\n";
 
