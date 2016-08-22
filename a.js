@@ -1,3 +1,7 @@
+if (typeof VERSION !== "undefined") {
+  document.getElementById("versionSpan").innerHTML =
+    '<a href="https://github.com/thejoshwolfe/snakefall/commits/' + VERSION + '">' + VERSION + '</a>';
+}
 var canvas = document.getElementById("canvas");
 
 var SPACE = 0;
