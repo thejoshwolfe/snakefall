@@ -7,6 +7,10 @@ import re
 git_status_regex = re.compile("On branch (.*)")
 
 def main():
+  version = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).strip()
+  with open("version.js", "w") as f:
+    f.write('var VERSION = "{}";\n'.format(version))
+
   git_status_output = subprocess.check_output(["git", "status"])
   git_status_match = git_status_regex.match(git_status_output)
   if git_status_match == None:
