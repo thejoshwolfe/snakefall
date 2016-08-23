@@ -199,16 +199,21 @@ function stringifyLevel(level) {
   }
   output += "/\n";
 
-  for (var i = 0; i < level.objects.length; i++) {
-    var object = level.objects[i];
-    output += object.type + object.id + " ";
-    output += "?" + object.locations.join("&") + "/\n";
-  }
+  output += serializeObjects(level.objects);
 
   // sanity check
   var shouldBeTheSame = parseLevel(output);
   if (!deepEquals(level, shouldBeTheSame)) throw asdf; // serialization/deserialization is broken
 
+  return output;
+}
+function serializeObjects(objects) {
+  var output = "";
+  for (var i = 0; i < objects.length; i++) {
+    var object = objects[i];
+    output += object.type + object.id + " ";
+    output += "?" + object.locations.join("&") + "/\n";
+  }
   return output;
 }
 function serializeObjectState(object) {
@@ -1199,12 +1204,14 @@ function reduceChangeLog(changeLog) {
 function undo(undoStuff) {
   if (undoStuff.undoStack.length === 0) return; // already at the beginning
   animationQueue = [];
+  animationQueueCursor = 0;
   paradoxes = [];
   undoOneFrame(undoStuff);
   undoStuffChanged(undoStuff);
 }
 function reset(undoStuff) {
   animationQueue = [];
+  animationQueueCursor = 0;
   paradoxes = [];
   while (undoStuff.undoStack.length > 0) {
     undoOneFrame(undoStuff);
@@ -1223,12 +1230,14 @@ function undoOneFrame(undoStuff) {
 function redo(undoStuff) {
   if (undoStuff.redoStack.length === 0) return; // already at the beginning
   animationQueue = [];
+  animationQueueCursor = 0;
   paradoxes = [];
   redoOneFrame(undoStuff);
   undoStuffChanged(undoStuff);
 }
 function replay(undoStuff) {
   animationQueue = [];
+  animationQueueCursor = 0;
   paradoxes = [];
   while (undoStuff.redoStack.length > 0) {
     redoOneFrame(undoStuff);
@@ -1416,10 +1425,11 @@ function showEditorChanged() {
 }
 
 function move(dr, dc) {
+  if (!isAlive()) return;
   animationQueue = [];
+  animationQueueCursor = 0;
   freshlyRemovedAnimatedObjects = [];
   animationStart = new Date().getTime();
-  if (!isAlive()) return;
   var changeLog = [];
   var activeSnake = findActiveSnake();
   var headRowcol = getRowcol(level, activeSnake.locations[0]);
@@ -1489,7 +1499,17 @@ function move(dr, dc) {
   animationQueue.push(slitherAnimations);
 
   // gravity loop
+  var stateToAnimationIndex = {};
   if (isGravity()) for (var fallHeight = 1;; fallHeight++) {
+    var serializedState = serializeObjects(level.objects);
+    var infiniteLoopStartIndex = stateToAnimationIndex[serializedState];
+    if (infiniteLoopStartIndex != null) {
+      // infinite loop
+      animationQueue.push([0, [INFINITE_LOOP, animationQueue.length - infiniteLoopStartIndex]]);
+      break;
+    } else {
+      stateToAnimationIndex[serializedState] = animationQueue.length;
+    }
     // do portals separate from falling logic
     if (portalActivationLocations.length === 1) {
       var portalAnimations = [500];
@@ -1805,6 +1825,7 @@ function getObjectsOfType(type) {
   });
 }
 function isDead() {
+  if (animationQueue.length > 0 && animationQueue[animationQueue.length - 1][1][0] === INFINITE_LOOP) return true;
   return getSnakes().filter(function(snake) {
     return !!snake.dead;
   }).length > 0;
@@ -1833,6 +1854,7 @@ var TELEPORT_BLOCK = "tb";
 var EXIT_SNAKE = "es";
 var DIE_SNAKE = "ds";
 var DIE_BLOCK = "db";
+var INFINITE_LOOP = "il";
 var animationQueue = [
   // // sequence of disjoint animation groups.
   // // each group completes before the next begins.
@@ -1845,25 +1867,34 @@ var animationQueue = [
   //     dr,
   //     dc,
   //   ],
+  //   [
+  //     INFINITE_LOOP,
+  //     loopSizeNotIncludingThis,
+  //   ],
   // ],
 ];
+var animationQueueCursor = 0;
 var animationStart = null; // new Date().getTime()
 var animationProgress; // 0.0 <= x < 1.0
 var freshlyRemovedAnimatedObjects = [];
 
 function render() {
   if (level == null) return;
-  if (animationQueue.length > 0) {
-    var animationDuration = animationQueue[0][0];
+  if (animationQueueCursor < animationQueue.length) {
+    var animationDuration = animationQueue[animationQueueCursor][0];
     animationProgress = (new Date().getTime() - animationStart) / animationDuration;
     if (animationProgress >= 1.0) {
       // animation group complete
       animationProgress -= 1.0;
-      animationQueue.shift();
+      animationQueueCursor++;
+      if (animationQueue[animationQueueCursor][1][0] === INFINITE_LOOP) {
+        var infiniteLoopSize = animationQueue[animationQueueCursor][1][1];
+        animationQueueCursor -= infiniteLoopSize;
+      }
       animationStart = new Date().getTime();
     }
   }
-  if (animationQueue.length === 0) animationProgress = 1.0;
+  if (animationQueueCursor === animationQueue.length) animationProgress = 1.0;
   canvas.width = tileSize * level.width;
   canvas.height = tileSize * level.height;
   var context = canvas.getContext("2d");
@@ -1883,7 +1914,7 @@ function render() {
     drawGrid();
   }
   // active snake halo
-  if (countSnakes() !== 0) {
+  if (countSnakes() !== 0 && isAlive()) {
     var activeSnake = findActiveSnake();
     var activeSnakeRowcol = getRowcol(level, activeSnake.locations[0]);
     drawCircle(activeSnakeRowcol.r, activeSnakeRowcol.c, 2, "rgba(256,256,256,0.3)");
@@ -2312,8 +2343,8 @@ function render() {
 }
 
 function findAnimation(animationTypes, objectId) {
-  if (animationQueue.length === 0) return null;
-  var currentAnimation = animationQueue[0];
+  if (animationQueueCursor === animationQueue.length) return null;
+  var currentAnimation = animationQueue[animationQueueCursor];
   for (var i = 1; i < currentAnimation.length; i++) {
     var animation = currentAnimation[i];
     if (animationTypes.indexOf(animation[0]) !== -1 &&
@@ -2330,7 +2361,7 @@ function findAnimationDisplacementRowcol(objectType, objectId) {
     "t" + objectType, // TELEPORT_SNAKE | TELEPORT_BLOCK
   ];
   // skip the current one
-  for (var i = 1; i < animationQueue.length; i++) {
+  for (var i = animationQueueCursor + 1; i < animationQueue.length; i++) {
     var animations = animationQueue[i];
     for (var j = 1; j < animations.length; j++) {
       var animation = animations[j];
@@ -2353,7 +2384,7 @@ function hasFutureRemoveAnimation(object) {
     EXIT_SNAKE,
     DIE_BLOCK,
   ];
-  for (var i = 0; i < animationQueue.length; i++) {
+  for (var i = animationQueueCursor; i < animationQueue.length; i++) {
     var animations = animationQueue[i];
     for (var j = 1; j < animations.length; j++) {
       var animation = animations[j];
