@@ -1887,7 +1887,7 @@ function render() {
       // animation group complete
       animationProgress -= 1.0;
       animationQueueCursor++;
-      if (animationQueue[animationQueueCursor][1][0] === INFINITE_LOOP) {
+      if (animationQueueCursor < animationQueue.length && animationQueue[animationQueueCursor][1][0] === INFINITE_LOOP) {
         var infiniteLoopSize = animationQueue[animationQueueCursor][1][1];
         animationQueueCursor -= infiniteLoopSize;
       }
