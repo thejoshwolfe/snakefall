@@ -7,10 +7,10 @@ var canvas = document.getElementById("canvas");
 var SPACE = 0;
 var WALL = 1;
 var SPIKE = 2;
-var FRUIT = 3;
+var FRUIT_v0 = 3; // legacy
 var EXIT = 4;
 var PORTAL = 5;
-var validTileCodes = [SPACE, WALL, SPIKE, FRUIT, EXIT, PORTAL];
+var validTileCodes = [SPACE, WALL, SPIKE, EXIT, PORTAL];
 
 var tileSize = 30;
 var level;
@@ -31,8 +31,9 @@ function loadLevel(newLevel) {
 }
 
 
-var magicNumber = "3tFRIoTU";
-var exampleLevel = magicNumber + "&" +
+var magicNumber_v0 = "3tFRIoTU";
+var magicNumber    = "HyRr4JK1";
+var exampleLevel = magicNumber_v0 + "&" +
   "17&31" +
   "?" +
     "0000000000000000000000000000000" +
@@ -45,21 +46,31 @@ var exampleLevel = magicNumber + "&" +
     "0000000000000110000000000000000" +
     "0000000000000111100000000000000" +
     "0000000000000011000000000000000" +
-    "0000000000000010003010000000000" +
-    "0000000000000010100011000300000" +
+    "0000000000000010000010000000000" +
+    "0000000000000010100011000000000" +
     "0000001111111000110000000110000" +
     "0000011111111111111111111110000" +
     "0000011111111101111111111100000" +
     "0000001111111100111111111100000" +
     "0000001111111000111111111100000" +
   "/" +
-  "s0 ?351&350&349/";
+  "s0 ?351&350&349/" +
+  "f0 ?328/" +
+  "f1 ?366/";
+
+var testLevel_v0 = "3tFRIoTU&5&5?0005*00300024005*001000/b0?7&6&15&23/s3?18/s0?1&0&5/s1?2/s4?10/s2?17/b2?9/b3?14/b4?19/b1?4&20/b5?24/";
+var testLevel_v0_converted = "HyRr4JK1&5&5?0005*4024005*001000/b0?7&6&15&23/s3?18/s0?1&0&5/s1?2/s4?10/s2?17/b2?9/b3?14/b4?19/b1?4&20/b5?24/f0?8/";
 
 function parseLevel(string) {
   // magic number
   var cursor = 0;
   skipWhitespace();
-  if (string.indexOf(magicNumber) !== 0) throw new Error("not a snakefall level");
+  var versionTag = string.substr(cursor, magicNumber.length);
+  switch (versionTag) {
+    case magicNumber_v0:
+    case magicNumber: break;
+    default: throw new Error("not a snakefall level");
+  }
   cursor += magicNumber.length;
   consumeKeyword("&");
 
@@ -79,8 +90,20 @@ function parseLevel(string) {
   var mapData = readRun();
   mapData = decompressSerialization(mapData);
   if (level.height * level.width !== mapData.length) throw parserError("height, width, and map.length do not jive");
+  var upconvertedObjects = [];
+  var fruitCount = 0;
   for (var i = 0; i < mapData.length; i++) {
     var tileCode = mapData[i].charCodeAt(0) - "0".charCodeAt(0);
+    if (tileCode === FRUIT_v0 && versionTag === magicNumber_v0) {
+      // fruit used to be a tile code. now it's an object.
+      upconvertedObjects.push({
+        type: "f",
+        id: fruitCount++,
+        dead: false, // unused
+        locations: [i],
+      });
+      tileCode = SPACE;
+    }
     if (validTileCodes.indexOf(tileCode) === -1) throw parserError("invalid tilecode: " + JSON.stringify(mapData[i]));
     level.map.push(tileCode);
   }
@@ -97,20 +120,22 @@ function parseLevel(string) {
 
     // type
     object.type = string[cursor];
-    var colorArray;
-    if      (object.type === "s") { colorArray = snakeColors; }
-    else if (object.type === "b") { colorArray = [1]; }
+    var locationsLimit;
+    if      (object.type === "s") locationsLimit = -1;
+    else if (object.type === "b") locationsLimit = -1;
+    else if (object.type === "f") locationsLimit = 1;
     else throw parserError("expected object type code");
     cursor += 1;
 
     // id
     object.id = readInt();
-    if (colorArray[object.id % colorArray.length] == null) throw parserError("invalid id");
 
     // locations
     var locationsData = readRun();
     var locationStrings = locationsData.split("&");
     if (locationStrings.length === 0) throw parserError("locations must be non-empty");
+    if (locationsLimit !== -1 && locationStrings.length > locationsLimit) throw parserError("too many locations");
+
     locationStrings.forEach(function(locationString) {
       var location = parseInt(locationString);
       if (!(0 <= location && location < level.map.length)) throw parserError("location out of bounds: " + JSON.stringify(locationString));
@@ -119,6 +144,9 @@ function parseLevel(string) {
 
     level.objects.push(object);
     skipWhitespace();
+  }
+  for (var i = 0; i < upconvertedObjects.length; i++) {
+    level.objects.push(upconvertedObjects[i]);
   }
 
   return level;
@@ -361,7 +389,7 @@ document.addEventListener("keydown", function(event) {
       if ( persistentState.showEditor && modifierMask === CTRL) { cutSelection(); break; }
       return;
     case "F".charCodeAt(0):
-      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(FRUIT); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode("f"); break; }
       return;
     case "D".charCodeAt(0):
       if (!persistentState.showEditor && modifierMask === 0) { move(0, 1); break; }
@@ -507,7 +535,7 @@ var paintButtonIdAndTileCodes = [
   ["paintWallButton",  WALL],
   ["paintSpikeButton", SPIKE],
   ["paintExitButton", EXIT],
-  ["paintFruitButton", FRUIT],
+  ["paintFruitButton", "f"],
   ["paintPortalButton", PORTAL],
   ["paintSnakeButton", "s"],
   ["paintBlockButton", "b"],
@@ -607,6 +635,9 @@ canvas.addEventListener("dblclick", function(event) {
       // edit this particular block
       paintBrushTileCode = "b";
       paintBrushBlockId = object.id;
+    } else if (object.type === "f") {
+      // edit fruits, i guess
+      paintBrushTileCode = "f";
     } else throw asdf;
     paintBrushTileCodeChanged();
   }
@@ -747,6 +778,7 @@ function paintBrushTileCodeChanged() {
     var backgroundStyle = "";
     if (tileCode === paintBrushTileCode) {
       if (tileCode === "s") {
+        // show the color of the active snake in the color of the button
         backgroundStyle = snakeColors[paintBrushSnakeColorIndex];
       } else {
         backgroundStyle = "#ff0";
@@ -932,6 +964,18 @@ function newBlock(location) {
     locations: [location],
   };
 }
+function newFruit(location) {
+  var fruits = getObjectsOfType("f");
+  for (var i = 0; i < fruits.length; i++) {
+    if (fruits[i].id !== i) break;
+  }
+  return {
+    type: "f",
+    id: i,
+    dead: false, // unused
+    locations: [location],
+  };
+}
 function paintAtLocation(location, changeLog) {
   if (typeof paintBrushTileCode === "number") {
     removeAnyObjectAtLocation(location, changeLog);
@@ -959,6 +1003,8 @@ function paintAtLocation(location, changeLog) {
         object.id = newSnake(object.id % snakeColors.length).id;
       } else if (object.type === "b") {
         object.id = newBlock().id;
+      } else if (object.type === "f") {
+        object.id = newFruit().id;
       } else throw asdf;
       level.objects.push(object);
       changeLog.push([object.type, object.id, [0,[]], serializeObjectState(object)]);
@@ -1028,6 +1074,10 @@ function paintAtLocation(location, changeLog) {
       }
       changeLog.push([thisBlock.type, thisBlock.id, oldBlockSerialization, serializeObjectState(thisBlock)]);
     }
+  } else if (paintBrushTileCode === "f") {
+    paintTileAtLocation(location, SPACE, changeLog);
+    removeAnyObjectAtLocation(location, changeLog);
+    level.objects.push(newFruit(location));
   } else throw asdf;
   render();
 }
@@ -1050,6 +1100,7 @@ function pushUndo(undoStuff, changeLog) {
   //   ["s", 0, [false, [1,2]], [false, [2,3]]],     // snake id 0 moved from alive at [1, 2] to alive at [2, 3]
   //   ["s", 1, [false, [11,12]], [true, [12,13]]],  // snake id 1 moved from alive at [11, 12] to dead at [12, 13]
   //   ["b", 1, [false, [20,30]], [false, []]],      // block id 1 was deleted from location [20, 30]
+  //   ["f", 0, [false, [40]], [false, []]],         // fruit id 0 was deleted from location [40]
   //   ["h", 25, 10],                                // height changed from 25 to 10. all cropped tiles are guaranteed to be SPACE.
   //   ["w", 8, 10],                                 // width changed from 8 to 10. a change in the coordinate system.
   //   ["m", 23, 2, 0],                              // map at location 23 changed from 2 to 0 in the new coordinate system.
@@ -1119,7 +1170,7 @@ function reduceChangeLog(changeLog) {
         changeLog.splice(i, 1);
         i--;
       }
-    } else if (change[0] === "s" || change[0] === "b") {
+    } else if (change[0] === "s" || change[0] === "b" || change[0] === "f") {
       for (var j = i + 1; j < changeLog.length; j++) {
         var otherChange = changeLog[j];
         if (otherChange[0] === change[0] && otherChange[1] === change[1]) {
@@ -1217,7 +1268,7 @@ function undoChanges(changes, changeLog) {
       if (location >= level.map.length) return "Can't turn " + describe(toTileCode) + " into " + describe(fromTileCode) + " out of bounds";
       if (level.map[location] !== toTileCode) return "Can't turn " + describe(toTileCode) + " into " + describe(fromTileCode) + " because there's " + describe(level.map[location]) + " there now";
       paintTileAtLocation(location, fromTileCode, changeLog);
-    } else if (change[0] === "s" || change[0] === "b") {
+    } else if (change[0] === "s" || change[0] === "b" || change[0] === "f") {
       // change object
       var type = change[0];
       var id = change[1];
@@ -1264,12 +1315,12 @@ function describe(arg1, arg2) {
   // describe("s", 0) -> "Snake 0 (Red)"
   // describe(object) -> "Snake 0 (Red)"
   // describe("b", 1) -> "Block 1"
+  // describe("f") -> "Fruit"
   if (typeof arg1 === "number") {
     switch (arg1) {
       case SPACE: return "Space";
       case WALL:  return "a Wall";
       case SPIKE: return "Spikes";
-      case FRUIT: return "Fruit";
       case EXIT:  return "an Exit";
       case PORTAL:  return "a Portal";
       default: throw asdf;
@@ -1289,6 +1340,9 @@ function describe(arg1, arg2) {
   }
   if (arg1 === "b") {
     return "Block " + arg2;
+  }
+  if (arg1 === "f") {
+    return "Fruit";
   }
   if (typeof arg1 === "object") return describe(arg1.type, arg1.id);
   throw asdf;
@@ -1372,16 +1426,18 @@ function move(dr, dc) {
 
   if (isCollision()) {
     var newTile = level.map[newLocation];
-    if (newTile === FRUIT) {
-      // eat
-      paintTileAtLocation(newLocation, SPACE, changeLog);
-      ate = true;
-    } else if (isTileCodeAir(newTile)) {
+    if (isTileCodeAir(newTile)) {
       var otherObject = findObjectAtLocation(newLocation);
       if (otherObject != null) {
         if (otherObject === activeSnake) return; // can't push yourself
-        // push objects
-        if (!checkMovement(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
+        if (otherObject.type === "f") {
+          // eat
+          removeObject(otherObject, changeLog);
+          ate = true;
+        } else {
+          // push objects
+          if (!checkMovement(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
+        }
       }
     } else return; // can't go through that tile
   }
@@ -1463,6 +1519,7 @@ function move(dr, dc) {
     // fall
     var dyingObjects = [];
     var fallingObjects = level.objects.filter(function(object) {
+      if (object.type === "f") return; // can't fall
       var theseDyingObjects = [];
       if (!checkMovement(null, object, 1, 0, [], theseDyingObjects)) return false;
       // this object can fall. maybe more will fall with it too. we'll check those separately.
@@ -1480,7 +1537,7 @@ function move(dr, dc) {
           object.dead = true;
           changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
           anySnakesDied = true;
-        } else {
+        } else if (object.type === "b") {
           // a box fell off the world
           removeAnimatedObject(object, changeLog);
           removeFromArray(fallingObjects, object);
@@ -1493,7 +1550,7 @@ function move(dr, dc) {
             ],
           ]);
           didAnything = true;
-        }
+        } else throw asdf;
       });
       if (anySnakesDied) break;
     }
@@ -1535,6 +1592,10 @@ function checkMovement(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects
       var forwardLocation = getLocation(level, forwardRowcol.r, forwardRowcol.c);
       var yetAnotherObject = findObjectAtLocation(forwardLocation);
       if (yetAnotherObject != null) {
+        if (yetAnotherObject.type === "f") {
+          // not pushable
+          return false;
+        }
         if (yetAnotherObject === pusher) {
           // indirect pushing ourselves.
           // special check for when we're indirectly pushing the tip of our own tail.
@@ -1709,10 +1770,7 @@ function findObjectAtLocation(location) {
   return null;
 }
 function isUneatenFruit() {
-  for (var i = 0; i < level.map.length; i++) {
-    if (level.map[i] === FRUIT) return true;
-  }
-  return false;
+  return getObjectsOfType("f").length > 0;
 }
 function getActivePortalLocations() {
   var portalLocations = getPortalLocations();
@@ -1947,6 +2005,10 @@ function render() {
         if (!(objectHere != null && objectHere.type === "b" && objectHere.id === paintBrushBlockId)) {
           drawObject(newBlock(hoverLocation));
         }
+      } else if (paintBrushTileCode === "f") {
+        if (!(objectHere != null && objectHere.type === "f")) {
+          drawObject(newFruit(hoverLocation));
+        }
       } else if (paintBrushTileCode === "resize") {
         void 0; // do nothing
       } else if (paintBrushTileCode === "select") {
@@ -1978,9 +2040,6 @@ function render() {
         break;
       case SPIKE:
         drawSpikes(r, c, level);
-        break;
-      case FRUIT:
-        drawCircle(r, c, 1, "#f0f");
         break;
       case EXIT:
         var radiusFactor = isUneatenFruit() ? 0.7 : 1.2;
@@ -2097,6 +2156,10 @@ function render() {
         break;
       case "b":
         drawBlock(object);
+        break;
+      case "f":
+        var rowcol = getRowcol(level, object.locations[0]);
+        drawCircle(rowcol.r, rowcol.c, 1, "#f0f");
         break;
       default: throw asdf;
     }
@@ -2417,6 +2480,12 @@ function loadFromLocationHash() {
   loadLevel(level);
   return true;
 }
+
+// run test suite
+var testTime = new Date().getTime();
+if (compressSerialization(stringifyLevel(parseLevel(testLevel_v0))) !== testLevel_v0_converted) throw new Error("v0 level conversion is broken");
+// ask the debug console for this variable if you're concerned with how much time this wastes.
+testTime = new Date().getTime() - testTime;
 
 loadPersistentState();
 if (!loadFromLocationHash()) {
