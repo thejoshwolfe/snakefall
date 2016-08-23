@@ -4,6 +4,7 @@ if (typeof VERSION !== "undefined") {
 }
 var canvas = document.getElementById("canvas");
 
+// tile codes
 var SPACE = 0;
 var WALL = 1;
 var SPIKE = 2;
@@ -11,6 +12,11 @@ var FRUIT_v0 = 3; // legacy
 var EXIT = 4;
 var PORTAL = 5;
 var validTileCodes = [SPACE, WALL, SPIKE, EXIT, PORTAL];
+
+// object types
+var SNAKE = "s";
+var BLOCK = "b";
+var FRUIT = "f";
 
 var tileSize = 30;
 var level;
@@ -97,7 +103,7 @@ function parseLevel(string) {
     if (tileCode === FRUIT_v0 && versionTag === magicNumber_v0) {
       // fruit used to be a tile code. now it's an object.
       upconvertedObjects.push({
-        type: "f",
+        type: FRUIT,
         id: fruitCount++,
         dead: false, // unused
         locations: [i],
@@ -121,9 +127,9 @@ function parseLevel(string) {
     // type
     object.type = string[cursor];
     var locationsLimit;
-    if      (object.type === "s") locationsLimit = -1;
-    else if (object.type === "b") locationsLimit = -1;
-    else if (object.type === "f") locationsLimit = 1;
+    if      (object.type === SNAKE) locationsLimit = -1;
+    else if (object.type === BLOCK) locationsLimit = -1;
+    else if (object.type === FRUIT) locationsLimit = 1;
     else throw parserError("expected object type code");
     cursor += 1;
 
@@ -389,14 +395,14 @@ document.addEventListener("keydown", function(event) {
       if ( persistentState.showEditor && modifierMask === CTRL) { cutSelection(); break; }
       return;
     case "F".charCodeAt(0):
-      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode("f"); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(FRUIT); break; }
       return;
     case "D".charCodeAt(0):
       if (!persistentState.showEditor && modifierMask === 0) { move(0, 1); break; }
-      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode("s"); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(SNAKE); break; }
       return;
     case "B".charCodeAt(0):
-      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode("b"); break; }
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(BLOCK); break; }
       return;
     case "G".charCodeAt(0):
       if (modifierMask === 0) { toggleGrid(); break; }
@@ -535,10 +541,10 @@ var paintButtonIdAndTileCodes = [
   ["paintWallButton",  WALL],
   ["paintSpikeButton", SPIKE],
   ["paintExitButton", EXIT],
-  ["paintFruitButton", "f"],
+  ["paintFruitButton", FRUIT],
   ["paintPortalButton", PORTAL],
-  ["paintSnakeButton", "s"],
-  ["paintBlockButton", "b"],
+  ["paintSnakeButton", SNAKE],
+  ["paintBlockButton", BLOCK],
 ];
 paintButtonIdAndTileCodes.forEach(function(pair) {
   var id = pair[0];
@@ -611,7 +617,7 @@ canvas.addEventListener("mousedown", function(event) {
     // playtime
     var object = findObjectAtLocation(location);
     if (object == null) return;
-    if (object.type !== "s") return;
+    if (object.type !== SNAKE) return;
     // active snake
     activeSnakeId = object.id;
     render();
@@ -627,17 +633,17 @@ canvas.addEventListener("dblclick", function(event) {
     var object = findObjectAtLocation(location);
     if (object == null) return;
     stopDragging();
-    if (object.type === "s") {
+    if (object.type === SNAKE) {
       // edit snakes of this color
-      paintBrushTileCode = "s";
+      paintBrushTileCode = SNAKE;
       paintBrushSnakeColorIndex = object.id % snakeColors.length;
-    } else if (object.type === "b") {
+    } else if (object.type === BLOCK) {
       // edit this particular block
-      paintBrushTileCode = "b";
+      paintBrushTileCode = BLOCK;
       paintBrushBlockId = object.id;
-    } else if (object.type === "f") {
+    } else if (object.type === FRUIT) {
       // edit fruits, i guess
-      paintBrushTileCode = "f";
+      paintBrushTileCode = FRUIT;
     } else throw asdf;
     paintBrushTileCodeChanged();
   }
@@ -725,14 +731,14 @@ function setPaintBrushTileCode(tileCode) {
     selectionStart = null;
     selectionEnd = null;
   }
-  if (tileCode === "s") {
-    if (paintBrushTileCode === "s") {
+  if (tileCode === SNAKE) {
+    if (paintBrushTileCode === SNAKE) {
       // next snake color
       paintBrushSnakeColorIndex = (paintBrushSnakeColorIndex + 1) % snakeColors.length;
     }
-  } else if (tileCode === "b") {
+  } else if (tileCode === BLOCK) {
     var blocks = getBlocks();
-    if (paintBrushTileCode === "b" && blocks.length > 0) {
+    if (paintBrushTileCode === BLOCK && blocks.length > 0) {
       // cycle through block ids
       blocks.sort(compareId);
       if (paintBrushBlockId != null) {
@@ -762,9 +768,9 @@ function setPaintBrushTileCode(tileCode) {
     }
   } else if (tileCode == null) {
     // escape
-    if (paintBrushTileCode === "b" && paintBrushBlockId != null) {
+    if (paintBrushTileCode === BLOCK && paintBrushBlockId != null) {
       // stop editing this block, but keep the block brush selected
-      tileCode = "b";
+      tileCode = BLOCK;
       paintBrushBlockId = null;
     }
   }
@@ -777,7 +783,7 @@ function paintBrushTileCodeChanged() {
     var tileCode = pair[1];
     var backgroundStyle = "";
     if (tileCode === paintBrushTileCode) {
-      if (tileCode === "s") {
+      if (tileCode === SNAKE) {
         // show the color of the active snake in the color of the button
         backgroundStyle = snakeColors[paintBrushSnakeColorIndex];
       } else {
@@ -945,7 +951,7 @@ function newSnake(color, location) {
     if (snakes[i].id !== i * snakeColors.length + color) break;
   }
   return {
-    type: "s",
+    type: SNAKE,
     id: i * snakeColors.length + color,
     dead: false,
     locations: [location],
@@ -958,19 +964,19 @@ function newBlock(location) {
     if (blocks[i].id !== i) break;
   }
   return {
-    type: "b",
+    type: BLOCK,
     id: i,
     dead: false, // unused
     locations: [location],
   };
 }
 function newFruit(location) {
-  var fruits = getObjectsOfType("f");
+  var fruits = getObjectsOfType(FRUIT);
   for (var i = 0; i < fruits.length; i++) {
     if (fruits[i].id !== i) break;
   }
   return {
-    type: "f",
+    type: FRUIT,
     id: i,
     dead: false, // unused
     locations: [location],
@@ -999,17 +1005,17 @@ function paintAtLocation(location, changeLog) {
     });
     pastedData.selectedObjects.forEach(function(object) {
       // refresh the ids so there are no collisions.
-      if (object.type === "s") {
+      if (object.type === SNAKE) {
         object.id = newSnake(object.id % snakeColors.length).id;
-      } else if (object.type === "b") {
+      } else if (object.type === BLOCK) {
         object.id = newBlock().id;
-      } else if (object.type === "f") {
+      } else if (object.type === FRUIT) {
         object.id = newFruit().id;
       } else throw asdf;
       level.objects.push(object);
       changeLog.push([object.type, object.id, [0,[]], serializeObjectState(object)]);
     });
-  } else if (paintBrushTileCode === "s") {
+  } else if (paintBrushTileCode === SNAKE) {
     var oldSnakeSerialization = serializeObjectState(paintBrushObject);
     if (paintBrushObject != null) {
       // keep dragging
@@ -1035,9 +1041,9 @@ function paintAtLocation(location, changeLog) {
       paintBrushObject.locations.unshift(location);
     }
     changeLog.push([paintBrushObject.type, paintBrushObject.id, oldSnakeSerialization, serializeObjectState(paintBrushObject)]);
-  } else if (paintBrushTileCode === "b") {
+  } else if (paintBrushTileCode === BLOCK) {
     var objectHere = findObjectAtLocation(location);
-    if (paintBrushBlockId == null && objectHere != null && objectHere.type === "b") {
+    if (paintBrushBlockId == null && objectHere != null && objectHere.type === BLOCK) {
       // just start editing this block
       paintBrushBlockId = objectHere.id;
     } else {
@@ -1074,7 +1080,7 @@ function paintAtLocation(location, changeLog) {
       }
       changeLog.push([thisBlock.type, thisBlock.id, oldBlockSerialization, serializeObjectState(thisBlock)]);
     }
-  } else if (paintBrushTileCode === "f") {
+  } else if (paintBrushTileCode === FRUIT) {
     paintTileAtLocation(location, SPACE, changeLog);
     removeAnyObjectAtLocation(location, changeLog);
     level.objects.push(newFruit(location));
@@ -1170,7 +1176,7 @@ function reduceChangeLog(changeLog) {
         changeLog.splice(i, 1);
         i--;
       }
-    } else if (change[0] === "s" || change[0] === "b" || change[0] === "f") {
+    } else if (change[0] === SNAKE || change[0] === BLOCK || change[0] === FRUIT) {
       for (var j = i + 1; j < changeLog.length; j++) {
         var otherChange = changeLog[j];
         if (otherChange[0] === change[0] && otherChange[1] === change[1]) {
@@ -1268,7 +1274,7 @@ function undoChanges(changes, changeLog) {
       if (location >= level.map.length) return "Can't turn " + describe(toTileCode) + " into " + describe(fromTileCode) + " out of bounds";
       if (level.map[location] !== toTileCode) return "Can't turn " + describe(toTileCode) + " into " + describe(fromTileCode) + " because there's " + describe(level.map[location]) + " there now";
       paintTileAtLocation(location, fromTileCode, changeLog);
-    } else if (change[0] === "s" || change[0] === "b" || change[0] === "f") {
+    } else if (change[0] === SNAKE || change[0] === BLOCK || change[0] === FRUIT) {
       // change object
       var type = change[0];
       var id = change[1];
@@ -1312,10 +1318,10 @@ function undoChanges(changes, changeLog) {
 }
 function describe(arg1, arg2) {
   // describe(0) -> "Space"
-  // describe("s", 0) -> "Snake 0 (Red)"
+  // describe(SNAKE, 0) -> "Snake 0 (Red)"
   // describe(object) -> "Snake 0 (Red)"
-  // describe("b", 1) -> "Block 1"
-  // describe("f") -> "Fruit"
+  // describe(BLOCK, 1) -> "Block 1"
+  // describe(FRUIT) -> "Fruit"
   if (typeof arg1 === "number") {
     switch (arg1) {
       case SPACE: return "Space";
@@ -1326,7 +1332,7 @@ function describe(arg1, arg2) {
       default: throw asdf;
     }
   }
-  if (arg1 === "s") {
+  if (arg1 === SNAKE) {
     var color = (function() {
       switch (snakeColors[arg2 % snakeColors.length]) {
         case "#f00": return " (Red)";
@@ -1338,10 +1344,10 @@ function describe(arg1, arg2) {
     })();
     return "Snake " + arg2 + color;
   }
-  if (arg1 === "b") {
+  if (arg1 === BLOCK) {
     return "Block " + arg2;
   }
-  if (arg1 === "f") {
+  if (arg1 === FRUIT) {
     return "Fruit";
   }
   if (typeof arg1 === "object") return describe(arg1.type, arg1.id);
@@ -1430,7 +1436,7 @@ function move(dr, dc) {
       var otherObject = findObjectAtLocation(newLocation);
       if (otherObject != null) {
         if (otherObject === activeSnake) return; // can't push yourself
-        if (otherObject.type === "f") {
+        if (otherObject.type === FRUIT) {
           // eat
           removeObject(otherObject, changeLog);
           ate = true;
@@ -1519,7 +1525,7 @@ function move(dr, dc) {
     // fall
     var dyingObjects = [];
     var fallingObjects = level.objects.filter(function(object) {
-      if (object.type === "f") return; // can't fall
+      if (object.type === FRUIT) return; // can't fall
       var theseDyingObjects = [];
       if (!checkMovement(null, object, 1, 0, [], theseDyingObjects)) return false;
       // this object can fall. maybe more will fall with it too. we'll check those separately.
@@ -1531,13 +1537,13 @@ function move(dr, dc) {
     if (dyingObjects.length > 0) {
       var anySnakesDied = false;
       dyingObjects.forEach(function(object) {
-        if (object.type === "s") {
+        if (object.type === SNAKE) {
           // look what you've done
           var oldState = serializeObjectState(object);
           object.dead = true;
           changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
           anySnakesDied = true;
-        } else if (object.type === "b") {
+        } else if (object.type === BLOCK) {
           // a box fell off the world
           removeAnimatedObject(object, changeLog);
           removeFromArray(fallingObjects, object);
@@ -1592,7 +1598,7 @@ function checkMovement(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects
       var forwardLocation = getLocation(level, forwardRowcol.r, forwardRowcol.c);
       var yetAnotherObject = findObjectAtLocation(forwardLocation);
       if (yetAnotherObject != null) {
-        if (yetAnotherObject.type === "f") {
+        if (yetAnotherObject.type === FRUIT) {
           // not pushable
           return false;
         }
@@ -1623,7 +1629,7 @@ function checkMovement(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects
         if (tileCode === SPIKE) {
           // uh... which object was this again?
           var deadObject = findObjectAtLocation(offsetLocation(forwardLocation, -dr, -dc));
-          if (deadObject.type === "s") {
+          if (deadObject.type === SNAKE) {
             // ouch!
             addIfNotPresent(dyingObjects, deadObject);
             continue;
@@ -1725,10 +1731,10 @@ function removeAnimatedObject(object, changeLog) {
 function removeObject(object, changeLog) {
   removeFromArray(level.objects, object);
   changeLog.push([object.type, object.id, [object.dead, copyArray(object.locations)], [0,[]]]);
-  if (object.type === "s" && object.id === activeSnakeId) {
+  if (object.type === SNAKE && object.id === activeSnakeId) {
     activateAnySnakePlease();
   }
-  if (object.type === "b" && paintBrushTileCode === "b" && paintBrushBlockId === object.id) {
+  if (object.type === BLOCK && paintBrushTileCode === BLOCK && paintBrushBlockId === object.id) {
     // no longer editing an object that doesn't exit
     paintBrushBlockId = null;
   }
@@ -1746,11 +1752,11 @@ function findActiveSnake() {
   throw asdf;
 }
 function findBlockById(id) {
-  return findObjectOfTypeAndId("b", id);
+  return findObjectOfTypeAndId(BLOCK, id);
 }
 function findSnakesOfColor(color) {
   return level.objects.filter(function(object) {
-    if (object.type !== "s") return false;
+    if (object.type !== SNAKE) return false;
     return object.id % snakeColors.length === color;
   });
 }
@@ -1770,7 +1776,7 @@ function findObjectAtLocation(location) {
   return null;
 }
 function isUneatenFruit() {
-  return getObjectsOfType("f").length > 0;
+  return getObjectsOfType(FRUIT).length > 0;
 }
 function getActivePortalLocations() {
   var portalLocations = getPortalLocations();
@@ -1788,10 +1794,10 @@ function countSnakes() {
   return getSnakes().length;
 }
 function getSnakes() {
-  return getObjectsOfType("s");
+  return getObjectsOfType(SNAKE);
 }
 function getBlocks() {
-  return getObjectsOfType("b");
+  return getObjectsOfType(BLOCK);
 }
 function getObjectsOfType(type) {
   return level.objects.filter(function(object) {
@@ -1884,7 +1890,7 @@ function render() {
   }
 
   if (persistentState.showEditor) {
-    if (paintBrushTileCode === "b") {
+    if (paintBrushTileCode === BLOCK) {
       if (paintBrushBlockId != null) {
         // fade everything else away
         context.fillStyle = "rgba(0, 0, 0, 0.8)";
@@ -1926,7 +1932,7 @@ function render() {
     }
     // begin by rendering the background connections for blocks
     objects.forEach(function(object) {
-      if (object.type !== "b") return;
+      if (object.type !== BLOCK) return;
       var animationDisplacementRowcol = findAnimationDisplacementRowcol(object.type, object.id);
       // Make a stencil that excludes the insides of blocks.
       // Then when we render the support beams, we won't see the supports inside the block itself.
@@ -1997,16 +2003,16 @@ function render() {
         if (level.map[hoverLocation] !== paintBrushTileCode) {
           drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c, level, hoverLocation);
         }
-      } else if (paintBrushTileCode === "s") {
-        if (!(objectHere != null && objectHere.type === "s" && objectHere.id === paintBrushSnakeColorIndex)) {
+      } else if (paintBrushTileCode === SNAKE) {
+        if (!(objectHere != null && objectHere.type === SNAKE && objectHere.id === paintBrushSnakeColorIndex)) {
           drawObject(newSnake(paintBrushSnakeColorIndex, hoverLocation));
         }
-      } else if (paintBrushTileCode === "b") {
-        if (!(objectHere != null && objectHere.type === "b" && objectHere.id === paintBrushBlockId)) {
+      } else if (paintBrushTileCode === BLOCK) {
+        if (!(objectHere != null && objectHere.type === BLOCK && objectHere.id === paintBrushBlockId)) {
           drawObject(newBlock(hoverLocation));
         }
-      } else if (paintBrushTileCode === "f") {
-        if (!(objectHere != null && objectHere.type === "f")) {
+      } else if (paintBrushTileCode === FRUIT) {
+        if (!(objectHere != null && objectHere.type === FRUIT)) {
           drawObject(newFruit(hoverLocation));
         }
       } else if (paintBrushTileCode === "resize") {
@@ -2076,7 +2082,7 @@ function render() {
 
   function drawObject(object) {
     switch (object.type) {
-      case "s":
+      case SNAKE:
         var animationDisplacementRowcol = findAnimationDisplacementRowcol(object.type, object.id);
         var lastRowcol = null
         var color = snakeColors[object.id % snakeColors.length];
@@ -2154,10 +2160,10 @@ function render() {
           drawCircle(headRowcol.r, headRowcol.c, 0.2, "#000");
         }
         break;
-      case "b":
+      case BLOCK:
         drawBlock(object);
         break;
-      case "f":
+      case FRUIT:
         var rowcol = getRowcol(level, object.locations[0]);
         drawCircle(rowcol.r, rowcol.c, 1, "#f0f");
         break;
@@ -2384,7 +2390,7 @@ function previewPaste(hoverR, hoverC) {
       rowcol.c += offsetC;
       if (!isInBounds(newLevel, rowcol.r, rowcol.c)) {
         // this location is oob
-        if (object.type === "s") {
+        if (object.type === SNAKE) {
           // snakes must be completely in bounds
           return;
         }
