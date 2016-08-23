@@ -11,7 +11,8 @@ var SPIKE = 2;
 var FRUIT_v0 = 3; // legacy
 var EXIT = 4;
 var PORTAL = 5;
-var validTileCodes = [SPACE, WALL, SPIKE, EXIT, PORTAL];
+var PLATFORM = 6;
+var validTileCodes = [SPACE, WALL, SPIKE, EXIT, PORTAL, PLATFORM];
 
 // object types
 var SNAKE = "s";
@@ -370,6 +371,9 @@ document.addEventListener("keydown", function(event) {
     case "P".charCodeAt(0):
       if ( persistentState.showEditor && modifierMask === 0) { playtest(); break; }
       return;
+    case "L".charCodeAt(0):
+      if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(PLATFORM); break; }
+      return;
     case 220: // backslash
       if (modifierMask === 0) { toggleShowEditor(); break; }
       return;
@@ -548,6 +552,7 @@ var paintButtonIdAndTileCodes = [
   ["paintExitButton", EXIT],
   ["paintFruitButton", FRUIT],
   ["paintPortalButton", PORTAL],
+  ["paintPlatformButton", PLATFORM],
   ["paintSnakeButton", SNAKE],
   ["paintBlockButton", BLOCK],
 ];
@@ -1338,6 +1343,7 @@ function describe(arg1, arg2) {
       case SPIKE: return "Spikes";
       case EXIT:  return "an Exit";
       case PORTAL:  return "a Portal";
+      case PLATFORM:  return "a Platform";
       default: throw asdf;
     }
   }
@@ -1442,20 +1448,20 @@ function move(dr, dc) {
 
   if (isCollision()) {
     var newTile = level.map[newLocation];
-    if (isTileCodeAir(newTile)) {
-      var otherObject = findObjectAtLocation(newLocation);
-      if (otherObject != null) {
-        if (otherObject === activeSnake) return; // can't push yourself
-        if (otherObject.type === FRUIT) {
-          // eat
-          removeObject(otherObject, changeLog);
-          ate = true;
-        } else {
-          // push objects
-          if (!checkMovement(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
-        }
+    if (!isTileCodeAir(newTile)) return; // can't go through that tile
+    if (newTile === PLATFORM && dr == 1) return; // can't go down through platforms
+    var otherObject = findObjectAtLocation(newLocation);
+    if (otherObject != null) {
+      if (otherObject === activeSnake) return; // can't push yourself
+      if (otherObject.type === FRUIT) {
+        // eat
+        removeObject(otherObject, changeLog);
+        ate = true;
+      } else {
+        // push objects
+        if (!checkMovement(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
       }
-    } else return; // can't go through that tile
+    }
   }
 
   // slither forward
@@ -1616,6 +1622,19 @@ function checkMovement(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects
         }
       }
       var forwardLocation = getLocation(level, forwardRowcol.r, forwardRowcol.c);
+      if (dr === 1 && level.map[forwardLocation] === PLATFORM) {
+        // this platform holds us, unless we're going through it
+        var neighborLocations;
+        if (pushedObject.type === SNAKE) {
+          neighborLocations = [];
+          if (j > 0) neighborLocations.push(pushedObject.locations[j - 1]);
+          if (j < pushedObject.locations.length - 1) neighborLocations.push(pushedObject.locations[j + 1]);
+        } else if (pushedObject.type === BLOCK) {
+          neighborLocations = pushedObject.locations;
+        } else throw asdf;
+        if (neighborLocations.indexOf(forwardLocation) === -1) return false; // flat surface
+        // we slip right past it
+      }
       var yetAnotherObject = findObjectAtLocation(forwardLocation);
       if (yetAnotherObject != null) {
         if (yetAnotherObject.type === FRUIT) {
@@ -1645,15 +1664,13 @@ function checkMovement(pusher, pushedObject, dr, dc, pushedObjects, dyingObjects
     // and we already know pushing that object.
     var tileCode = level.map[forwardLocation];
     if (!isTileCodeAir(tileCode)) {
-      if (dyingObjects != null) {
-        if (tileCode === SPIKE) {
-          // uh... which object was this again?
-          var deadObject = findObjectAtLocation(offsetLocation(forwardLocation, -dr, -dc));
-          if (deadObject.type === SNAKE) {
-            // ouch!
-            addIfNotPresent(dyingObjects, deadObject);
-            continue;
-          }
+      if (tileCode === SPIKE && dyingObjects != null) {
+        // uh... which object was this again?
+        var deadObject = findObjectAtLocation(offsetLocation(forwardLocation, -dr, -dc));
+        if (deadObject.type === SNAKE) {
+          // ouch!
+          addIfNotPresent(dyingObjects, deadObject);
+          continue;
         }
       }
       // can't push into something solid
@@ -1733,7 +1750,7 @@ function activatePortal(portalLocations, portalLocation, animations, changeLog) 
 }
 
 function isTileCodeAir(tileCode) {
-  return tileCode === SPACE || tileCode === EXIT || tileCode === PORTAL;
+  return tileCode === SPACE || tileCode === EXIT || tileCode === PORTAL || tileCode === PLATFORM;
 }
 
 function addIfNotPresent(array, element) {
@@ -2023,6 +2040,7 @@ function render() {
     if (persistentState.showEditor && paintBrushTileCode != null && hoverLocation != null && hoverLocation < level.map.length) {
 
       var savedContext = context;
+      var hoverAlpha = 0.2;
       var buffer = document.createElement("canvas");
       buffer.width = canvas.width;
       buffer.height = canvas.height;
@@ -2033,6 +2051,10 @@ function render() {
       if (typeof paintBrushTileCode === "number") {
         if (level.map[hoverLocation] !== paintBrushTileCode) {
           drawTile(paintBrushTileCode, hoverRowcol.r, hoverRowcol.c, level, hoverLocation);
+          if (paintBrushTileCode === PLATFORM) {
+            // make it bolder
+            hoverAlpha = 0.4;
+          }
         }
       } else if (paintBrushTileCode === SNAKE) {
         if (!(objectHere != null && objectHere.type === SNAKE && objectHere.id === paintBrushSnakeColorIndex)) {
@@ -2063,7 +2085,7 @@ function render() {
 
       context = savedContext;
       context.save();
-      context.globalAlpha = 0.2;
+      context.globalAlpha = hoverAlpha;
       context.drawImage(buffer, 0, 0);
       context.restore();
     }
@@ -2089,6 +2111,9 @@ function render() {
         drawCircle(r, c, 0.8, "#888");
         drawCircle(r, c, 0.6, "#111");
         if (activePortalLocations.indexOf(location) !== -1) drawCircle(r, c, 0.3, "#666");
+        break;
+      case PLATFORM:
+        drawPlatform(r, c);
         break;
       default: throw asdf;
     }
@@ -2247,6 +2272,15 @@ function render() {
     context.lineTo(x + tileSize * 0.3, y + tileSize * 0.5);
     context.lineTo(x + tileSize * 0.0, y + tileSize * 0.4);
     context.lineTo(x + tileSize * 0.3, y + tileSize * 0.3);
+    context.fill();
+  }
+  function drawPlatform(r, c) {
+    context.fillStyle = "#b9733d";
+    context.beginPath();
+    context.moveTo(c * tileSize, r * tileSize);
+    context.lineTo((c + 1) * tileSize, r * tileSize);
+    context.arc((c + 3/4) * tileSize, (r + 1/4) * tileSize, tileSize/4, 0, Math.PI);
+    context.arc((c + 1/4) * tileSize, (r + 1/4) * tileSize, tileSize/4, 0, Math.PI);
     context.fill();
   }
   function drawConnector(r1, c1, r2, c2, color) {
