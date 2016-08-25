@@ -271,6 +271,7 @@ function parseAndLoadReplay(string) {
 }
 
 function saveToUrlBar(withReplay) {
+  if (isDead()) return alert("Can't save while you're dead!");
   var hash = "#level=" + compressSerialization(stringifyLevel(level));
   if (withReplay) {
     hash += "#replay=" + stringifyReplay();
@@ -280,7 +281,7 @@ function saveToUrlBar(withReplay) {
 
 function deepEquals(a, b) {
   if (a == null) return b == null;
-  if (typeof a === "string" || typeof a === "number") return a === b;
+  if (typeof a === "string" || typeof a === "number" || typeof a === "boolean") return a === b;
   if (Array.isArray(a)) {
     if (!Array.isArray(b)) return false;
     if (a.length !== b.length) return false;
@@ -982,6 +983,7 @@ function newBlock(location) {
 }
 function newFruit(location) {
   var fruits = getObjectsOfType(FRUIT);
+  fruits.sort(compareId);
   for (var i = 0; i < fruits.length; i++) {
     if (fruits[i].id !== i) break;
   }
@@ -1956,11 +1958,13 @@ function render() {
   }
 
   // serialize
-  var serialization = stringifyLevel(level);
-  document.getElementById("serializationTextarea").value = serialization;
-  var link = location.href.substring(0, location.href.length - location.hash.length);
-  link += "#level=" + compressSerialization(serialization);
-  document.getElementById("shareLinkTextbox").value = link;
+  if (!isDead()) {
+    var serialization = stringifyLevel(level);
+    document.getElementById("serializationTextarea").value = serialization;
+    var link = location.href.substring(0, location.href.length - location.hash.length);
+    link += "#level=" + compressSerialization(serialization);
+    document.getElementById("shareLinkTextbox").value = link;
+  }
 
   // throw this in there somewhere
   document.getElementById("showGridButton").value = (persistentState.showGrid ? "Hide" : "Show") + " Grid";
