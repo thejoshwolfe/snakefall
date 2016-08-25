@@ -279,7 +279,7 @@ function saveToUrlBar(withReplay) {
 
 function deepEquals(a, b) {
   if (a == null) return b == null;
-  if (typeof a === "string" || typeof a === "number") return a === b;
+  if (typeof a === "string" || typeof a === "number" || typeof a === "boolean") return a === b;
   if (Array.isArray(a)) {
     if (!Array.isArray(b)) return false;
     if (a.length !== b.length) return false;
