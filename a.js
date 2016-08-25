@@ -270,6 +270,7 @@ function parseAndLoadReplay(string) {
 }
 
 function saveToUrlBar(withReplay) {
+  if (isDead()) return alert("Can't save while you're dead!");
   var hash = "#level=" + compressSerialization(stringifyLevel(level));
   if (withReplay) {
     hash += "#replay=" + stringifyReplay();
@@ -1940,11 +1941,13 @@ function render() {
   }
 
   // serialize
-  var serialization = stringifyLevel(level);
-  document.getElementById("serializationTextarea").value = serialization;
-  var link = location.href.substring(0, location.href.length - location.hash.length);
-  link += "#level=" + compressSerialization(serialization);
-  document.getElementById("shareLinkTextbox").value = link;
+  if (!isDead()) {
+    var serialization = stringifyLevel(level);
+    document.getElementById("serializationTextarea").value = serialization;
+    var link = location.href.substring(0, location.href.length - location.hash.length);
+    link += "#level=" + compressSerialization(serialization);
+    document.getElementById("shareLinkTextbox").value = link;
+  }
 
   // throw this in there somewhere
   document.getElementById("showGridButton").value = (persistentState.showGrid ? "Hide" : "Show") + " Grid";
