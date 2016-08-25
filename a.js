@@ -977,6 +977,7 @@ function newBlock(location) {
 }
 function newFruit(location) {
   var fruits = getObjectsOfType(FRUIT);
+  fruits.sort(compareId);
   for (var i = 0; i < fruits.length; i++) {
     if (fruits[i].id !== i) break;
   }
