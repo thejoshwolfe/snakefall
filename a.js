@@ -703,6 +703,10 @@ canvas.addEventListener("mouseout", function() {
 function getLocationFromEvent(event) {
   var r = Math.floor(eventToMouseY(event, canvas) / tileSize);
   var c = Math.floor(eventToMouseX(event, canvas) / tileSize);
+  // since the canvas is centered, the bounding client rect can be half-pixel aligned,
+  // resulting in slightly out-of-bounds mouse events.
+  r = clamp(r, 0, level.height);
+  c = clamp(c, 0, level.width);
   return getLocation(level, r, c);
 }
 function eventToMouseX(event, canvas) { return event.clientX - canvas.getBoundingClientRect().left; }
@@ -2514,6 +2518,11 @@ function compareId(a, b) {
 }
 function operatorCompare(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+function clamp(value, min, max) {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
 }
 function copyArray(array) {
   return array.map(identityFunction);
