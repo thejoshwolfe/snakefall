@@ -33,6 +33,7 @@ function loadLevel(newLevel) {
   uneditStuff.undoStack = [];
   uneditStuff.redoStack = [];
   undoStuffChanged(uneditStuff);
+  blockSupportRenderCache = {};
   render();
 }
 
@@ -1086,6 +1087,7 @@ function paintAtLocation(location, changeLog) {
         }
       }
       changeLog.push([thisBlock.type, thisBlock.id, oldBlockSerialization, serializeObjectState(thisBlock)]);
+      delete blockSupportRenderCache[thisBlock.id];
     }
   } else if (paintBrushTileCode === FRUIT) {
     paintTileAtLocation(location, SPACE, changeLog);
@@ -1760,6 +1762,9 @@ function removeObject(object, changeLog) {
     // no longer editing an object that doesn't exit
     paintBrushBlockId = null;
   }
+  if (object.type === BLOCK) {
+    delete blockSupportRenderCache[object.id];
+  }
 }
 function removeFromArray(array, element) {
   var index = array.indexOf(element);
@@ -1880,6 +1885,13 @@ var animationStart = null; // new Date().getTime()
 var animationProgress; // 0.0 <= x < 1.0
 var freshlyRemovedAnimatedObjects = [];
 
+// render the support beams for blocks into a temporary buffer, and remember it.
+// this is due to stencil buffers causing slowdown on some platforms.
+var blockSupportRenderCache = {
+  // id: canvas,
+  // "0": document.createElement("canvas"),
+};
+
 function render() {
   if (level == null) return;
   if (animationQueueCursor < animationQueue.length) {
@@ -1969,32 +1981,52 @@ function render() {
     objects.forEach(function(object) {
       if (object.type !== BLOCK) return;
       var animationDisplacementRowcol = findAnimationDisplacementRowcol(object.type, object.id);
-      // Make a stencil that excludes the insides of blocks.
-      // Then when we render the support beams, we won't see the supports inside the block itself.
-      context.save();
-      context.beginPath();
-      // Draw a path around the whole screen in the opposite direction as the rectangle paths below.
-      // This means that the below rectangles will be removing area from the greater rectangle.
-      context.rect(canvas.width, 0, -canvas.width, canvas.height);
-      for (var i = 0; i < object.locations.length; i++) {
-        var rowcol = getRowcol(level, object.locations[i]);
-        rowcol.r += animationDisplacementRowcol.r;
-        rowcol.c += animationDisplacementRowcol.c;
-        context.rect(rowcol.c * tileSize, rowcol.r * tileSize, tileSize, tileSize);
+      var minR = Infinity;
+      var maxR = -Infinity;
+      var minC = Infinity;
+      var maxC = -Infinity;
+      object.locations.forEach(function(location) {
+        var rowcol = getRowcol(level, location);
+        if (rowcol.r < minR) minR = rowcol.r;
+        if (rowcol.r > maxR) maxR = rowcol.r;
+        if (rowcol.c < minC) minC = rowcol.c;
+        if (rowcol.c > maxC) maxC = rowcol.c;
+      });
+      var image = blockSupportRenderCache[object.id];
+      if (image == null) {
+        // render the support beams to a buffer
+        blockSupportRenderCache[object.id] = image = document.createElement("canvas");
+        image.width  = (maxC - minC + 1) * tileSize;
+        image.height = (maxR - minR + 1) * tileSize;
+        var bufferContext = image.getContext("2d");
+        // Make a stencil that excludes the insides of blocks.
+        // Then when we render the support beams, we won't see the supports inside the block itself.
+        bufferContext.beginPath();
+        // Draw a path around the whole screen in the opposite direction as the rectangle paths below.
+        // This means that the below rectangles will be removing area from the greater rectangle.
+        bufferContext.rect(image.width, 0, -image.width, image.height);
+        for (var i = 0; i < object.locations.length; i++) {
+          var rowcol = getRowcol(level, object.locations[i]);
+          var r = rowcol.r - minR;
+          var c = rowcol.c - minC;
+          bufferContext.rect(c * tileSize, r * tileSize, tileSize, tileSize);
+        }
+        bufferContext.clip();
+        for (var i = 0; i < object.locations.length - 1; i++) {
+          var rowcol1 = getRowcol(level, object.locations[i]);
+          rowcol1.r -= minR;
+          rowcol1.c -= minC;
+          var rowcol2 = getRowcol(level, object.locations[i + 1]);
+          rowcol2.r -= minR;
+          rowcol2.c -= minC;
+          var cornerRowcol = {r:rowcol1.r, c:rowcol2.c};
+          drawConnector(bufferContext, rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id % blockBackground.length]);
+          drawConnector(bufferContext, rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id % blockBackground.length]);
+        }
       }
-      context.clip();
-      for (var i = 0; i < object.locations.length - 1; i++) {
-        var rowcol1 = getRowcol(level, object.locations[i]);
-        rowcol1.r += animationDisplacementRowcol.r;
-        rowcol1.c += animationDisplacementRowcol.c;
-        var rowcol2 = getRowcol(level, object.locations[i + 1]);
-        rowcol2.r += animationDisplacementRowcol.r;
-        rowcol2.c += animationDisplacementRowcol.c;
-        var cornerRowcol = {r:rowcol1.r, c:rowcol2.c};
-        drawConnector(rowcol1.r, rowcol1.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id % blockBackground.length]);
-        drawConnector(rowcol2.r, rowcol2.c, cornerRowcol.r, cornerRowcol.c, blockBackground[object.id % blockBackground.length]);
-      }
-      context.restore();
+      var r = minR + animationDisplacementRowcol.r;
+      var c = minC + animationDisplacementRowcol.c;
+      context.drawImage(image, c * tileSize, r * tileSize);
     });
 
     // terrain
@@ -2253,7 +2285,7 @@ function render() {
     context.lineTo(x + tileSize * 0.3, y + tileSize * 0.3);
     context.fill();
   }
-  function drawConnector(r1, c1, r2, c2, color) {
+  function drawConnector(context, r1, c1, r2, c2, color) {
     // either r1 and r2 or c1 and c2 must be equal
     if (r1 > r2 || c1 > c2) {
       var rTmp = r1;
