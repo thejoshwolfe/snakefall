@@ -1886,7 +1886,7 @@ var animationProgress; // 0.0 <= x < 1.0
 var freshlyRemovedAnimatedObjects = [];
 
 // render the support beams for blocks into a temporary buffer, and remember it.
-// this is due to stencil buffers causing slowdown on some platforms.
+// this is due to stencil buffers causing slowdown on some platforms. see #25.
 var blockSupportRenderCache = {
   // id: canvas,
   // "0": document.createElement("canvas"),
