@@ -18,6 +18,10 @@ var SNAKE = "s";
 var BLOCK = "b";
 var FRUIT = "f";
 
+// object states
+// nothing interesting = 0;
+var DEAD_STATE = 1;
+
 var tileSize = 30;
 var level;
 var unmoveStuff = {undoStack:[], redoStack:[], spanId:"movesSpan", undoButtonId:"unmoveButton", redoButtonId:"removeButton"};
@@ -106,7 +110,7 @@ function parseLevel(string) {
       upconvertedObjects.push({
         type: FRUIT,
         id: fruitCount++,
-        dead: false, // unused
+        state: 0,
         locations: [i],
       });
       tileCode = SPACE;
@@ -121,7 +125,7 @@ function parseLevel(string) {
     var object = {
       type: "?",
       id: -1,
-      dead: false,
+      state: 0,
       locations: [],
     };
 
@@ -219,7 +223,7 @@ function serializeObjects(objects) {
 }
 function serializeObjectState(object) {
   if (object == null) return [0,[]];
-  return [object.dead, copyArray(object.locations)];
+  return [object.state, copyArray(object.locations)];
 }
 
 var base66 = "----0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -964,7 +968,7 @@ function newSnake(color, location) {
   return {
     type: SNAKE,
     id: i * snakeColors.length + color,
-    dead: false,
+    state: 0,
     locations: [location],
   };
 }
@@ -977,7 +981,7 @@ function newBlock(location) {
   return {
     type: BLOCK,
     id: i,
-    dead: false, // unused
+    state: 0,
     locations: [location],
   };
 }
@@ -990,7 +994,7 @@ function newFruit(location) {
   return {
     type: FRUIT,
     id: i,
-    dead: false, // unused
+    state: 0,
     locations: [location],
   };
 }
@@ -1117,15 +1121,15 @@ function playtest() {
 
 function pushUndo(undoStuff, changeLog) {
   // changeLog = [
-  //   ["m", 21, 0, 1],                              // map at location 23 changed from 0 to 1
-  //   ["s", 0, [false, [1,2]], [false, [2,3]]],     // snake id 0 moved from alive at [1, 2] to alive at [2, 3]
-  //   ["s", 1, [false, [11,12]], [true, [12,13]]],  // snake id 1 moved from alive at [11, 12] to dead at [12, 13]
-  //   ["b", 1, [false, [20,30]], [false, []]],      // block id 1 was deleted from location [20, 30]
-  //   ["f", 0, [false, [40]], [false, []]],         // fruit id 0 was deleted from location [40]
-  //   ["h", 25, 10],                                // height changed from 25 to 10. all cropped tiles are guaranteed to be SPACE.
-  //   ["w", 8, 10],                                 // width changed from 8 to 10. a change in the coordinate system.
-  //   ["m", 23, 2, 0],                              // map at location 23 changed from 2 to 0 in the new coordinate system.
-  //   10,                                           // the last change is always a declaration of the final width of the map.
+  //   ["m", 21, 0, 1],                      // map at location 23 changed from 0 to 1
+  //   ["s", 0, [0, [1,2]], [0, [2,3]]],     // snake id 0 moved from alive at [1, 2] to alive at [2, 3]
+  //   ["s", 1, [0, [11,12]], [1, [12,13]]], // snake id 1 moved from alive at [11, 12] to dead at [12, 13]
+  //   ["b", 1, [0, [20,30]], [0, []]],      // block id 1 was deleted from location [20, 30]
+  //   ["f", 0, [0, [40]], [0, []]],         // fruit id 0 was deleted from location [40]
+  //   ["h", 25, 10],                        // height changed from 25 to 10. all cropped tiles are guaranteed to be SPACE.
+  //   ["w", 8, 10],                         // width changed from 8 to 10. a change in the coordinate system.
+  //   ["m", 23, 2, 0],                      // map at location 23 changed from 2 to 0 in the new coordinate system.
+  //   10,                                   // the last change is always a declaration of the final width of the map.
   // ];
   reduceChangeLog(changeLog);
   if (changeLog.length === 0) return;
@@ -1297,8 +1301,8 @@ function undoChanges(changes, changeLog) {
       // change object
       var type = change[0];
       var id = change[1];
-      var fromDead = change[2][0];
-      var   toDead = change[3][0];
+      var fromState = change[2][0];
+      var   toState = change[3][0];
       var fromLocations = change[2][1].map(transformLocation);
       var   toLocations = change[3][1].map(transformLocation);
       if (fromLocations.filter(function(location) { return location >= level.map.length; }).length > 0) {
@@ -1309,12 +1313,12 @@ function undoChanges(changes, changeLog) {
         // should exist at this location
         if (object == null) return "Can't move " + describe(type, id) + " because it doesn't exit";
         if (!deepEquals(object.locations, toLocations)) return "Can't move " + describe(object) + " because it's in the wrong place";
-        if (object.dead !== toDead) return "Can't move " + describe(object) + " because it's alive/dead state doesn't match";
+        if (object.state !== toState) return "Can't move " + describe(object) + " because it's alive/dead state doesn't match";
         // doit
         if (fromLocations.length !== 0) {
           var oldState = serializeObjectState(object);
           object.locations = fromLocations;
-          object.dead = fromDead;
+          object.state = fromState;
           changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
         } else {
           removeObject(object, changeLog);
@@ -1326,7 +1330,7 @@ function undoChanges(changes, changeLog) {
         object = {
           type: type,
           id: id,
-          dead: fromDead,
+          state: fromState,
           locations: fromLocations,
         };
         level.objects.push(object);
@@ -1570,7 +1574,7 @@ function move(dr, dc) {
         if (object.type === SNAKE) {
           // look what you've done
           var oldState = serializeObjectState(object);
-          object.dead = true;
+          object.state = DEAD_STATE;
           changeLog.push([object.type, object.id, oldState, serializeObjectState(object)]);
           anySnakesDied = true;
         } else if (object.type === BLOCK) {
@@ -1760,7 +1764,7 @@ function removeAnimatedObject(object, changeLog) {
 }
 function removeObject(object, changeLog) {
   removeFromArray(level.objects, object);
-  changeLog.push([object.type, object.id, [object.dead, copyArray(object.locations)], [0,[]]]);
+  changeLog.push([object.type, object.id, [object.state, copyArray(object.locations)], [0,[]]]);
   if (object.type === SNAKE && object.id === activeSnakeId) {
     activateAnySnakePlease();
   }
@@ -1840,7 +1844,7 @@ function getObjectsOfType(type) {
 function isDead() {
   if (animationQueue.length > 0 && animationQueue[animationQueue.length - 1][1][0] === INFINITE_LOOP) return true;
   return getSnakes().filter(function(snake) {
-    return !!snake.dead;
+    return snake.state === DEAD_STATE;
   }).length > 0;
 }
 function isAlive() {
@@ -2182,7 +2186,7 @@ function render() {
           } else {
             rowcol = getRowcol(level, object.locations[i]);
           }
-          if (object.dead) rowcol.r += 0.5;
+          if (object.state === DEAD_STATE) rowcol.r += 0.5;
           rowcol.r += animationDisplacementRowcol.r;
           rowcol.c += animationDisplacementRowcol.c;
           if (i === 0) {
