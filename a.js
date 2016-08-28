@@ -23,12 +23,16 @@ var FRUIT = "f";
 var DEAD_STATE = 1;
 
 var tileSize = 30;
-var level;
+var level; // the current state of the level
+var pristineLevel; // the state of the level before making moves
+var isLevelPristine; // false once you use the editor. invalidates replays.
 var unmoveStuff = {undoStack:[], redoStack:[], spanId:"movesSpan", undoButtonId:"unmoveButton", redoButtonId:"removeButton"};
 var uneditStuff = {undoStack:[], redoStack:[], spanId:"editsSpan", undoButtonId:"uneditButton", redoButtonId:"reeditButton"};
 var paradoxes = [];
 function loadLevel(newLevel) {
   level = newLevel;
+  pristineLevel = parseLevel(stringifyLevel(level));
+  isLevelPristine = true;
 
   activateAnySnakePlease();
   unmoveStuff.undoStack = [];
@@ -960,43 +964,49 @@ function setWidth(newWidth, changeLog) {
 }
 
 function newSnake(color, location) {
-  var snakes = findSnakesOfColor(color);
-  snakes.sort(compareId);
-  for (var i = 0; i < snakes.length; i++) {
-    if (snakes[i].id !== i * snakeColors.length + color) break;
-  }
   return {
     type: SNAKE,
-    id: i * snakeColors.length + color,
+    id: findAvailableId(SNAKE, snakeColors.length, color),
     state: 0,
     locations: [location],
   };
 }
 function newBlock(location) {
-  var blocks = getBlocks();
-  blocks.sort(compareId);
-  for (var i = 0; i < blocks.length; i++) {
-    if (blocks[i].id !== i) break;
-  }
   return {
     type: BLOCK,
-    id: i,
+    id: findAvailableId(BLOCK),
     state: 0,
     locations: [location],
   };
 }
 function newFruit(location) {
-  var fruits = getObjectsOfType(FRUIT);
-  fruits.sort(compareId);
-  for (var i = 0; i < fruits.length; i++) {
-    if (fruits[i].id !== i) break;
-  }
   return {
     type: FRUIT,
-    id: i,
+    id: findAvailableId(FRUIT),
     state: 0,
     locations: [location],
   };
+}
+function findAvailableId(objectType, denominator, remainder) {
+  if (denominator == null) {
+    denominator = 1;
+    remainder = 0;
+  }
+  var idSet = {};
+  var idList = [];
+  level.objects.concat(pristineLevel.objects).forEach(function(object) {
+    if (object.type !== objectType) return;
+    if (object.id % denominator !== remainder) return;
+    if (idSet[object.id]) return;
+    idSet[object.id] = true;
+    idList.push(object.id);
+  });
+  idList.sort();
+  for (var i = 0;; i++) {
+    var id = i * denominator + remainder;
+    // this might overflow the bounds, which is fine
+    if (idList[i] !== id) return id;
+  }
 }
 function paintAtLocation(location, changeLog) {
   if (typeof paintBrushTileCode === "number") {
@@ -1104,6 +1114,11 @@ function paintAtLocation(location, changeLog) {
     level.objects.push(object);
     changeLog.push([object.type, object.id, serializeObjectState(null), serializeObjectState(object)]);
   } else throw asdf;
+  // this happens mid-drag, which is before the undo changelog gets finalized
+  if (changeLog.length > 0) {
+    isLevelPristine = false;
+    console.log("not pristine");
+  }
   render();
 }
 
@@ -1137,6 +1152,10 @@ function pushUndo(undoStuff, changeLog) {
   undoStuff.undoStack.push(changeLog);
   undoStuff.redoStack = [];
   paradoxes = [];
+  if (undoStuff === uneditStuff) {
+    // non-zero change using the editor.
+    isLevelPristine = false;
+  }
   undoStuffChanged(undoStuff);
 }
 function reduceChangeLog(changeLog) {
@@ -1924,6 +1943,20 @@ function render() {
   var context = canvas.getContext("2d");
   context.fillStyle = "#88f"; // sky
   context.fillRect(0, 0, canvas.width, canvas.height);
+  if (!isLevelPristine) {
+    // draw striped background to indicate a construction zone
+    context.fillStyle = "#99f"; // stripes
+    context.beginPath();
+    context.moveTo(0, 0);
+    var triangleLegLength = level.width + level.height;
+    for (var i = 0; i < triangleLegLength; i += 2) {
+      context.lineTo(i * tileSize, 0);
+      context.lineTo(0, i * tileSize);
+      context.lineTo(0, (i+1) * tileSize);
+      context.lineTo((i+1) * tileSize, 0);
+    }
+    context.fill();
+  }
 
   if (persistentState.showGrid && !persistentState.showEditor) {
     drawGrid();
