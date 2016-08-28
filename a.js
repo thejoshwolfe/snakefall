@@ -1092,7 +1092,9 @@ function paintAtLocation(location, changeLog) {
   } else if (paintBrushTileCode === FRUIT) {
     paintTileAtLocation(location, SPACE, changeLog);
     removeAnyObjectAtLocation(location, changeLog);
-    level.objects.push(newFruit(location));
+    var object = newFruit(location)
+    level.objects.push(object);
+    changeLog.push([object.type, object.id, serializeObjectState(null), serializeObjectState(object)]);
   } else throw asdf;
   render();
 }
