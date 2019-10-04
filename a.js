@@ -1,3 +1,4 @@
+function unreachable() { return new Error("unreachable"); }
 if (typeof VERSION !== "undefined") {
   document.getElementById("versionSpan").innerHTML =
     '<a href="https://github.com/thejoshwolfe/snakefall/commits/' + VERSION + '">' + VERSION + '</a>';
@@ -263,18 +264,41 @@ function decompressSerialization(string) {
   return result;
 }
 
+var replayMagicNumber = "nmGTi8PB";
 function stringifyReplay() {
-  throw asdf; // TODO
+  var output = replayMagicNumber + "&";
+  // only specify the snake id in an input if it's different from the previous.
+  // the first snake index is 0 to optimize for the single-snake case.
+  var currentSnakeId = 0;
+  for (var i = 0; i < unmoveStuff.undoStack.length; i++) {
+    var firstChange = unmoveStuff.undoStack[i][0];
+    if (firstChange[0] !== "i") throw unreachable();
+    var snakeId = firstChange[1];
+    var dr = firstChange[2];
+    var dc = firstChange[3];
+    var directionCode;
+    if      (dr ===-1 && dc === 0) directionCode = "u";
+    else if (dr === 0 && dc ===-1) directionCode = "l";
+    else if (dr === 1 && dc === 0) directionCode = "d";
+    else if (dr === 0 && dc === 1) directionCode = "r";
+    else throw unreachable();
+    if (snakeId !== currentSnakeId) {
+      output += snakeId; // int to string
+      currentSnakeId = snakeId;
+    }
+    output += directionCode;
+  }
+  return output;
 }
 function parseAndLoadReplay(string) {
-  throw asdf; // TODO
+  alert("TODO: load the reply");
 }
 
 function saveToUrlBar(withReplay) {
   if (isDead()) return alert("Can't save while you're dead!");
   var hash = "#level=" + compressSerialization(stringifyLevel(level));
   if (withReplay) {
-    hash += "#replay=" + stringifyReplay();
+    hash += "#replay=" + compressSerialization(stringifyReplay());
   }
   location.hash = hash;
 }
@@ -304,11 +328,11 @@ function deepEquals(a, b) {
 }
 
 function getLocation(level, r, c) {
-  if (!isInBounds(level, r, c)) throw asdf;
+  if (!isInBounds(level, r, c)) throw unreachable();
   return r * level.width + c;
 }
 function getRowcol(level, location) {
-  if (location < 0 || location >= level.width * level.height) throw asdf;
+  if (location < 0 || location >= level.width * level.height) throw unreachable();
   var r = Math.floor(location / level.width);
   var c = location % level.width;
   return {r:r, c:c};
@@ -651,7 +675,7 @@ canvas.addEventListener("dblclick", function(event) {
     } else if (object.type === FRUIT) {
       // edit fruits, i guess
       paintBrushTileCode = FRUIT;
-    } else throw asdf;
+    } else throw unreachable();
     paintBrushTileCodeChanged();
   }
 });
@@ -767,7 +791,7 @@ function setPaintBrushTileCode(tileCode) {
               return;
             }
           }
-          throw asdf
+          throw unreachable()
         })();
       } else {
         // first one
@@ -1023,7 +1047,7 @@ function paintAtLocation(location, changeLog) {
         object.id = newBlock().id;
       } else if (object.type === FRUIT) {
         object.id = newFruit().id;
-      } else throw asdf;
+      } else throw unreachable();
       level.objects.push(object);
       changeLog.push([object.type, object.id, [0,[]], serializeObjectState(object)]);
     });
@@ -1099,7 +1123,7 @@ function paintAtLocation(location, changeLog) {
     var object = newFruit(location)
     level.objects.push(object);
     changeLog.push([object.type, object.id, serializeObjectState(null), serializeObjectState(object)]);
-  } else throw asdf;
+  } else throw unreachable();
   render();
 }
 
@@ -1117,6 +1141,7 @@ function playtest() {
 
 function pushUndo(undoStuff, changeLog) {
   // changeLog = [
+  //   ["i", 0, -1, 0],                              // player input for snake 0, dr:-1, dc:0. has no effect on state. always the first change in unmoveStuff changeLogs.
   //   ["m", 21, 0, 1],                              // map at location 23 changed from 0 to 1
   //   ["s", 0, [false, [1,2]], [false, [2,3]]],     // snake id 0 moved from alive at [1, 2] to alive at [2, 3]
   //   ["s", 1, [false, [11,12]], [true, [12,13]]],  // snake id 1 moved from alive at [11, 12] to dead at [12, 13]
@@ -1138,7 +1163,9 @@ function pushUndo(undoStuff, changeLog) {
 function reduceChangeLog(changeLog) {
   for (var i = 0; i < changeLog.length - 1; i++) {
     var change = changeLog[i];
-    if (change[0] === "h") {
+    if (change[0] === "i") {
+      continue; // don't reduce player input
+    } else if (change[0] === "h") {
       for (var j = i + 1; j < changeLog.length; j++) {
         var otherChange = changeLog[j];
         if (otherChange[0] === "h") {
@@ -1208,7 +1235,7 @@ function reduceChangeLog(changeLog) {
         changeLog.splice(i, 1);
         i--;
       }
-    } else throw asdf;
+    } else throw unreachable();
   }
 }
 function undo(undoStuff) {
@@ -1273,7 +1300,9 @@ function undoChanges(changes, changeLog) {
 
   function undoChange(change) {
     // note: everything here is going backwards: to -> from
-    if (change[0] === "h") {
+    if (change[0] === "i") {
+      return null; // no state change
+    } else if (change[0] === "h") {
       // change height
       var fromHeight = change[1];
       var   toHeight = change[2];
@@ -1332,7 +1361,7 @@ function undoChanges(changes, changeLog) {
         level.objects.push(object);
         changeLog.push([object.type, object.id, [0,[]], serializeObjectState(object)]);
       }
-    } else throw asdf;
+    } else throw unreachable();
   }
 }
 function describe(arg1, arg2) {
@@ -1348,7 +1377,7 @@ function describe(arg1, arg2) {
       case SPIKE: return "Spikes";
       case EXIT:  return "an Exit";
       case PORTAL:  return "a Portal";
-      default: throw asdf;
+      default: throw unreachable();
     }
   }
   if (arg1 === SNAKE) {
@@ -1358,7 +1387,7 @@ function describe(arg1, arg2) {
         case "#0f0": return " (Green)";
         case "#00f": return " (Blue)";
         case "#ff0": return " (Yellow)";
-        default: throw asdf;
+        default: throw unreachable();
       }
     })();
     return "Snake " + arg2 + color;
@@ -1370,7 +1399,7 @@ function describe(arg1, arg2) {
     return "Fruit";
   }
   if (typeof arg1 === "object") return describe(arg1.type, arg1.id);
-  throw asdf;
+  throw unreachable();
 }
 
 function undoStuffChanged(undoStuff) {
@@ -1440,32 +1469,34 @@ function move(dr, dc) {
   animationQueueCursor = 0;
   freshlyRemovedAnimatedObjects = [];
   animationStart = new Date().getTime();
-  var changeLog = [];
   var activeSnake = findActiveSnake();
   var headRowcol = getRowcol(level, activeSnake.locations[0]);
   var newRowcol = {r:headRowcol.r + dr, c:headRowcol.c + dc};
   if (!isInBounds(level, newRowcol.r, newRowcol.c)) return;
   var newLocation = getLocation(level, newRowcol.r, newRowcol.c);
 
+  // the changeLog for a player movement always starts with the input
+  var changeLog = [];
+  changeLog.push(["i", activeSnake.id, dr, dc]);
+
   var ate = false;
   var pushedObjects = [];
 
   if (isCollision()) {
     var newTile = level.map[newLocation];
-    if (isTileCodeAir(newTile)) {
-      var otherObject = findObjectAtLocation(newLocation);
-      if (otherObject != null) {
-        if (otherObject === activeSnake) return; // can't push yourself
-        if (otherObject.type === FRUIT) {
-          // eat
-          removeObject(otherObject, changeLog);
-          ate = true;
-        } else {
-          // push objects
-          if (!checkMovement(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
-        }
+    if (!isTileCodeAir(newTile)) return; // can't go through that tile
+    var otherObject = findObjectAtLocation(newLocation);
+    if (otherObject != null) {
+      if (otherObject === activeSnake) return; // can't push yourself
+      if (otherObject.type === FRUIT) {
+        // eat
+        removeObject(otherObject, changeLog);
+        ate = true;
+      } else {
+        // push objects
+        if (!checkMovement(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
       }
-    } else return; // can't go through that tile
+    }
   }
 
   // slither forward
@@ -1586,7 +1617,7 @@ function move(dr, dc) {
             ],
           ]);
           didAnything = true;
-        } else throw asdf;
+        } else throw unreachable();
       });
       if (anySnakesDied) break;
     }
@@ -1774,7 +1805,7 @@ function removeObject(object, changeLog) {
 }
 function removeFromArray(array, element) {
   var index = array.indexOf(element);
-  if (index === -1) throw asdf;
+  if (index === -1) throw unreachable();
   array.splice(index, 1);
 }
 function findActiveSnake() {
@@ -1782,7 +1813,7 @@ function findActiveSnake() {
   for (var i = 0; i < snakes.length; i++) {
     if (snakes[i].id === activeSnakeId) return snakes[i];
   }
-  throw asdf;
+  throw unreachable();
 }
 function findBlockById(id) {
   return findObjectOfTypeAndId(BLOCK, id);
@@ -2101,7 +2132,7 @@ function render() {
           drawTile(tileCode, rowcol.r, rowcol.c, pastedData.level, location);
         });
         pastedData.selectedObjects.forEach(drawObject);
-      } else throw asdf;
+      } else throw unreachable();
 
       context = savedContext;
       context.save();
@@ -2132,7 +2163,7 @@ function render() {
         drawCircle(r, c, 0.6, "#111");
         if (activePortalLocations.indexOf(location) !== -1) drawCircle(r, c, 0.3, "#666");
         break;
-      default: throw asdf;
+      default: throw unreachable();
     }
     function getAdjacentTiles() {
       return [
@@ -2240,7 +2271,7 @@ function render() {
         var rowcol = getRowcol(level, object.locations[0]);
         drawCircle(rowcol.r, rowcol.c, 1, "#f0f");
         break;
-      default: throw asdf;
+      default: throw unreachable();
     }
   }
 
