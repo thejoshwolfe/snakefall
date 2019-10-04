@@ -1,29 +1,40 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import sys
 import subprocess
 import re
-
-git_status_regex = re.compile("On branch (.*)")
+import os
 
 def main():
-  version = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).strip()
-  with open("version.js", "w") as f:
-    f.write('var VERSION = "{}";\n'.format(version))
+    # generate version.js
+    version = git("rev-parse", "--short", "HEAD").rstrip()
+    if re.match(r"^[0-9a-f]{4,40}$", version) == None:
+        sys.exit("ERROR: malformed git rev-parse output: " + repr(version))
+    with open("version.js", "w") as f:
+        f.write('var VERSION = "{}";\n'.format(version))
 
-  git_status_output = subprocess.check_output(["git", "status"])
-  git_status_match = git_status_regex.match(git_status_output)
-  if git_status_match == None:
-    sys.exit("ERROR: git status didn't include branch?")
-  branch_name = git_status_match.group(1)
-  if branch_name == "master":
-    prefix = ""
-  else:
-    prefix = "experimental/" + branch_name
+    # determine experimental branch
+    branch_name = git("rev-parse", "--abbrev-ref", "HEAD").rstrip()
+    if branch_name == "master":
+        publish_subdir = ""
+    else:
+        subdir = "experimental/" + branch_name
+        if os.path.normpath(subdir) != subdir:
+            sys.exit("ERROR: strange path characters in branch name: " + repr(branch_name))
+        publish_subdir = subdir + "/"
 
-  cmd = ["rsync", "-vaz", "--delete", "--exclude=.*", "--exclude=experimental/", "./", "server:public_http/snakefall/" + prefix]
-  print(" ".join(cmd))
-  subprocess.check_call(cmd)
+    cmd = [
+        "s3cmd", "sync",
+        "-P", "--no-preserve", "--add-header=Cache-Control: max-age=0, must-revalidate",
+        "index.html", "a.js", "version.js",
+        "s3://wolfesoftware.com/snakefall/" + publish_subdir,
+    ]
+    print(" ".join(cmd))
+    subprocess.check_call(cmd)
+
+def git(*args):
+    cmd = ["git"] + list(args)
+    return subprocess.check_output(cmd).decode("utf8")
 
 if __name__ == "__main__":
-  main()
+    main()
