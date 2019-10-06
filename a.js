@@ -1,3 +1,4 @@
+function unreachable() { return new Error("unreachable"); }
 if (typeof VERSION !== "undefined") {
   document.getElementById("versionSpan").innerHTML =
     '<a href="https://github.com/thejoshwolfe/snakefall/commits/' + VERSION + '">' + VERSION + '</a>';
@@ -25,6 +26,7 @@ var uneditStuff = {undoStack:[], redoStack:[], spanId:"editsSpan", undoButtonId:
 var paradoxes = [];
 function loadLevel(newLevel) {
   level = newLevel;
+  currentSerializedLevel = compressSerialization(stringifyLevel(newLevel));
 
   activateAnySnakePlease();
   unmoveStuff.undoStack = [];
@@ -263,19 +265,100 @@ function decompressSerialization(string) {
   return result;
 }
 
+var replayMagicNumber = "nmGTi8PB";
 function stringifyReplay() {
-  throw asdf; // TODO
+  var output = replayMagicNumber + "&";
+  // only specify the snake id in an input if it's different from the previous.
+  // the first snake index is 0 to optimize for the single-snake case.
+  var currentSnakeId = 0;
+  for (var i = 0; i < unmoveStuff.undoStack.length; i++) {
+    var firstChange = unmoveStuff.undoStack[i][0];
+    if (firstChange[0] !== "i") throw unreachable();
+    var snakeId = firstChange[1];
+    var dr = firstChange[2];
+    var dc = firstChange[3];
+    var directionCode;
+    if      (dr ===-1 && dc === 0) directionCode = "u";
+    else if (dr === 0 && dc ===-1) directionCode = "l";
+    else if (dr === 1 && dc === 0) directionCode = "d";
+    else if (dr === 0 && dc === 1) directionCode = "r";
+    else throw unreachable();
+    if (snakeId !== currentSnakeId) {
+      output += snakeId; // int to string
+      currentSnakeId = snakeId;
+    }
+    output += directionCode;
+  }
+  return output;
 }
 function parseAndLoadReplay(string) {
-  throw asdf; // TODO
+  string = decompressSerialization(string);
+  var expectedPrefix = replayMagicNumber + "&";
+  if (string.substring(0, expectedPrefix.length) !== expectedPrefix) throw new Error("unrecognized replay string");
+  var cursor = expectedPrefix.length;
+
+  // the starting snakeid is 0, which may not exist, but we only validate it when doing a move.
+  activeSnakeId = 0;
+  while (cursor < string.length) {
+    var snakeIdStr = "";
+    var c = string.charAt(cursor);
+    cursor += 1;
+    while ('0' <= c && c <= '9') {
+      snakeIdStr += c;
+      if (cursor >= string.length) throw new Error("replay string has unexpected end of input");
+      c = string.charAt(cursor);
+      cursor += 1;
+    }
+    if (snakeIdStr.length > 0) {
+      activeSnakeId = parseInt(snakeIdStr);
+      // don't just validate when switching snakes, but on every move.
+    }
+
+    // doing a move.
+    if (!getSnakes().some(function(snake) {
+      return snake.id === activeSnakeId;
+    })) {
+      throw new Error("invalid snake id: " + activeSnakeId);
+    }
+    switch (c) {
+      case 'l': move( 0, -1); break;
+      case 'u': move(-1,  0); break;
+      case 'r': move( 0,  1); break;
+      case 'd': move( 1,  0); break;
+      default: throw new Error("replay string has invalid direction: " + c);
+    }
+  }
+
+  // now that the replay was executed successfully, undo it all so that it's available in the redo buffer.
+  reset(unmoveStuff);
+  document.getElementById("removeButton").classList.add("click-me");
 }
 
-function saveToUrlBar(withReplay) {
+var currentSerializedLevel;
+function saveLevel() {
   if (isDead()) return alert("Can't save while you're dead!");
-  var hash = "#level=" + compressSerialization(stringifyLevel(level));
-  if (withReplay) {
-    hash += "#replay=" + stringifyReplay();
+  var serializedLevel = compressSerialization(stringifyLevel(level));
+  currentSerializedLevel = serializedLevel;
+  var hash = "#level=" + serializedLevel;
+  expectHash = hash;
+  location.hash = hash;
+
+  // This marks a starting point for solving the level.
+  unmoveStuff.undoStack = [];
+  unmoveStuff.redoStack = [];
+  editorHasBeenTouched = false;
+  undoStuffChanged(unmoveStuff);
+}
+
+function saveReplay() {
+  if (dirtyState === EDITOR_DIRTY) return alert("Can't save a replay with unsaved editor changes.");
+  // preserve the level in the url bar.
+  var hash = "#level=" + currentSerializedLevel;
+  if (dirtyState === REPLAY_DIRTY) {
+    // there is a replay to save
+    hash += "#replay=" + compressSerialization(stringifyReplay());
   }
+  expectHash = hash;
   location.hash = hash;
 }
 
@@ -304,11 +387,11 @@ function deepEquals(a, b) {
 }
 
 function getLocation(level, r, c) {
-  if (!isInBounds(level, r, c)) throw asdf;
+  if (!isInBounds(level, r, c)) throw unreachable();
   return r * level.width + c;
 }
 function getRowcol(level, location) {
-  if (location < 0 || location >= level.width * level.height) throw asdf;
+  if (location < 0 || location >= level.width * level.height) throw unreachable();
   var r = Math.floor(location / level.width);
   var c = location % level.width;
   return {r:r, c:c};
@@ -366,12 +449,9 @@ document.addEventListener("keydown", function(event) {
     case "R".charCodeAt(0):
       if (persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
       if (modifierMask === 0)     { reset(unmoveStuff);  break; }
-      if (modifierMask === SHIFT) { replay(unmoveStuff); break; }
+      if (modifierMask === SHIFT) { unreset(unmoveStuff); break; }
       return;
 
-    case "P".charCodeAt(0):
-      if ( persistentState.showEditor && modifierMask === 0) { playtest(); break; }
-      return;
     case 220: // backslash
       if (modifierMask === 0) { toggleShowEditor(); break; }
       return;
@@ -394,8 +474,9 @@ document.addEventListener("keydown", function(event) {
       if (!persistentState.showEditor && modifierMask === 0)     { move(1, 0); break; }
       if ( persistentState.showEditor && modifierMask === 0)     { setPaintBrushTileCode(SPIKE); break; }
       if ( persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("resize"); break; }
-      if (modifierMask ===  CTRL       ) { saveToUrlBar(); break; }
-      if (modifierMask === (CTRL|SHIFT)) { saveToUrlBar(true); break; }
+      if ( persistentState.showEditor && modifierMask === CTRL)  { saveLevel(); break; }
+      if (!persistentState.showEditor && modifierMask === CTRL)  { saveReplay(); break; }
+      if (modifierMask === (CTRL|SHIFT))                         { saveReplay(); break; }
       return;
     case "X".charCodeAt(0):
       if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(EXIT); break; }
@@ -481,7 +562,7 @@ document.getElementById("showGridButton").addEventListener("click", function() {
   toggleGrid();
 });
 document.getElementById("saveProgressButton").addEventListener("click", function() {
-  saveToUrlBar(true);
+  saveReplay();
 });
 document.getElementById("restartButton").addEventListener("click", function() {
   reset(unmoveStuff);
@@ -560,9 +641,6 @@ paintButtonIdAndTileCodes.forEach(function(pair) {
     setPaintBrushTileCode(tileCode);
   });
 });
-document.getElementById("playtestButton").addEventListener("click", function() {
-  playtest();
-});
 document.getElementById("uneditButton").addEventListener("click", function() {
   undo(uneditStuff);
   render();
@@ -572,7 +650,7 @@ document.getElementById("reeditButton").addEventListener("click", function() {
   render();
 });
 document.getElementById("saveLevelButton").addEventListener("click", function() {
-  saveToUrlBar();
+  saveLevel();
 });
 document.getElementById("copyButton").addEventListener("click", function() {
   copySelection();
@@ -597,10 +675,10 @@ function toggleCollision() {
   refreshCheatButtonText();
 }
 function refreshCheatButtonText() {
-  document.getElementById("cheatGravityButton").value = isGravityEnabled ? "Gravity: ON" : "Gravity: OFF";
+  document.getElementById("cheatGravityButton").textContent = isGravityEnabled ? "Gravity: ON" : "Gravity: OFF";
   document.getElementById("cheatGravityButton").style.background = isGravityEnabled ? "" : "#f88";
 
-  document.getElementById("cheatCollisionButton").value = isCollisionEnabled ? "Collision: ON" : "Collision: OFF";
+  document.getElementById("cheatCollisionButton").textContent = isCollisionEnabled ? "Collision: ON" : "Collision: OFF";
   document.getElementById("cheatCollisionButton").style.background = isCollisionEnabled ? "" : "#f88";
 }
 
@@ -651,7 +729,7 @@ canvas.addEventListener("dblclick", function(event) {
     } else if (object.type === FRUIT) {
       // edit fruits, i guess
       paintBrushTileCode = FRUIT;
-    } else throw asdf;
+    } else throw unreachable();
     paintBrushTileCodeChanged();
   }
 });
@@ -767,7 +845,7 @@ function setPaintBrushTileCode(tileCode) {
               return;
             }
           }
-          throw asdf
+          throw unreachable()
         })();
       } else {
         // first one
@@ -1023,7 +1101,7 @@ function paintAtLocation(location, changeLog) {
         object.id = newBlock().id;
       } else if (object.type === FRUIT) {
         object.id = newFruit().id;
-      } else throw asdf;
+      } else throw unreachable();
       level.objects.push(object);
       changeLog.push([object.type, object.id, [0,[]], serializeObjectState(object)]);
     });
@@ -1099,7 +1177,7 @@ function paintAtLocation(location, changeLog) {
     var object = newFruit(location)
     level.objects.push(object);
     changeLog.push([object.type, object.id, serializeObjectState(null), serializeObjectState(object)]);
-  } else throw asdf;
+  } else throw unreachable();
   render();
 }
 
@@ -1109,14 +1187,14 @@ function paintTileAtLocation(location, tileCode, changeLog) {
   level.map[location] = tileCode;
 }
 
-function playtest() {
-  unmoveStuff.undoStack = [];
-  unmoveStuff.redoStack = [];
-  undoStuffChanged(unmoveStuff);
-}
-
 function pushUndo(undoStuff, changeLog) {
   // changeLog = [
+  //   ["i", 0, -1, 0, animationQueue, freshlyRemovedAnimatedObjects],
+  //                                                 // player input for snake 0, dr:-1, dc:0. has no effect on state.
+  //                                                 //   "i" is always the first change in normal player movement.
+  //                                                 //   if a changeLog does not start with "i", then it is an editor action.
+  //                                                 //   animationQueue and freshlyRemovedAnimatedObjects
+  //                                                 //   are used for animating re-move.
   //   ["m", 21, 0, 1],                              // map at location 23 changed from 0 to 1
   //   ["s", 0, [false, [1,2]], [false, [2,3]]],     // snake id 0 moved from alive at [1, 2] to alive at [2, 3]
   //   ["s", 1, [false, [11,12]], [true, [12,13]]],  // snake id 1 moved from alive at [11, 12] to dead at [12, 13]
@@ -1133,12 +1211,17 @@ function pushUndo(undoStuff, changeLog) {
   undoStuff.undoStack.push(changeLog);
   undoStuff.redoStack = [];
   paradoxes = [];
+
+  if (undoStuff === uneditStuff) editorHasBeenTouched = true;
+
   undoStuffChanged(undoStuff);
 }
 function reduceChangeLog(changeLog) {
   for (var i = 0; i < changeLog.length - 1; i++) {
     var change = changeLog[i];
-    if (change[0] === "h") {
+    if (change[0] === "i") {
+      continue; // don't reduce player input
+    } else if (change[0] === "h") {
       for (var j = i + 1; j < changeLog.length; j++) {
         var otherChange = changeLog[j];
         if (otherChange[0] === "h") {
@@ -1208,7 +1291,7 @@ function reduceChangeLog(changeLog) {
         changeLog.splice(i, 1);
         i--;
       }
-    } else throw asdf;
+    } else throw unreachable();
   }
 }
 function undo(undoStuff) {
@@ -1236,6 +1319,8 @@ function undoOneFrame(undoStuff) {
     redoChangeLog.push(level.width);
     undoStuff.redoStack.push(redoChangeLog);
   }
+
+  if (undoStuff === uneditStuff) editorHasBeenTouched = true;
 }
 function redo(undoStuff) {
   if (undoStuff.redoStack.length === 0) return; // already at the beginning
@@ -1245,7 +1330,7 @@ function redo(undoStuff) {
   redoOneFrame(undoStuff);
   undoStuffChanged(undoStuff);
 }
-function replay(undoStuff) {
+function unreset(undoStuff) {
   animationQueue = [];
   animationQueueCursor = 0;
   paradoxes = [];
@@ -1253,6 +1338,11 @@ function replay(undoStuff) {
     redoOneFrame(undoStuff);
   }
   undoStuffChanged(undoStuff);
+
+  // don't animate the last frame
+  animationQueue = [];
+  animationQueueCursor = 0;
+  freshlyRemovedAnimatedObjects = [];
 }
 function redoOneFrame(undoStuff) {
   var doThis = undoStuff.redoStack.pop();
@@ -1262,6 +1352,8 @@ function redoOneFrame(undoStuff) {
     undoChangeLog.push(level.width);
     undoStuff.undoStack.push(undoChangeLog);
   }
+
+  if (undoStuff === uneditStuff) editorHasBeenTouched = true;
 }
 function undoChanges(changes, changeLog) {
   var widthContext = changes.pop();
@@ -1271,9 +1363,22 @@ function undoChanges(changes, changeLog) {
     if (paradoxDescription != null) paradoxes.push(paradoxDescription);
   }
 
+  var lastChange = changes[changes.length - 1];
+  if (lastChange[0] === "i") {
+    // replay animation
+    animationQueue = lastChange[4];
+    animationQueueCursor = 0;
+    freshlyRemovedAnimatedObjects = lastChange[5];
+    animationStart = new Date().getTime();
+  }
+
   function undoChange(change) {
     // note: everything here is going backwards: to -> from
-    if (change[0] === "h") {
+    if (change[0] === "i") {
+      // no state change, but preserve the intention.
+      changeLog.push(change);
+      return null;
+    } else if (change[0] === "h") {
       // change height
       var fromHeight = change[1];
       var   toHeight = change[2];
@@ -1332,7 +1437,7 @@ function undoChanges(changes, changeLog) {
         level.objects.push(object);
         changeLog.push([object.type, object.id, [0,[]], serializeObjectState(object)]);
       }
-    } else throw asdf;
+    } else throw unreachable();
   }
 }
 function describe(arg1, arg2) {
@@ -1348,7 +1453,7 @@ function describe(arg1, arg2) {
       case SPIKE: return "Spikes";
       case EXIT:  return "an Exit";
       case PORTAL:  return "a Portal";
-      default: throw asdf;
+      default: throw unreachable();
     }
   }
   if (arg1 === SNAKE) {
@@ -1358,7 +1463,7 @@ function describe(arg1, arg2) {
         case "#0f0": return " (Green)";
         case "#00f": return " (Blue)";
         case "#ff0": return " (Yellow)";
-        default: throw asdf;
+        default: throw unreachable();
       }
     })();
     return "Snake " + arg2 + color;
@@ -1370,7 +1475,7 @@ function describe(arg1, arg2) {
     return "Fruit";
   }
   if (typeof arg1 === "object") return describe(arg1.type, arg1.id);
-  throw asdf;
+  throw unreachable();
 }
 
 function undoStuffChanged(undoStuff) {
@@ -1398,6 +1503,57 @@ function undoStuffChanged(undoStuff) {
     paradoxDivContent += "Time Travel Paradox! " + uniqueParadoxes[i];
   });
   document.getElementById("paradoxDiv").innerHTML = paradoxDivContent;
+
+  updateDirtyState();
+
+  if (unmoveStuff.redoStack.length === 0) {
+    document.getElementById("removeButton").classList.remove("click-me");
+  }
+}
+
+var CLEAN_NO_TIMELINES = 0;
+var CLEAN_WITH_REDO = 1;
+var REPLAY_DIRTY = 2;
+var EDITOR_DIRTY = 3;
+var dirtyState = CLEAN_NO_TIMELINES;
+var editorHasBeenTouched = false;
+function updateDirtyState() {
+  if (haveCheatcodesBeenUsed() || editorHasBeenTouched) {
+    dirtyState = EDITOR_DIRTY;
+  } else if (unmoveStuff.undoStack.length > 0) {
+    dirtyState = REPLAY_DIRTY;
+  } else if (unmoveStuff.redoStack.length > 0) {
+    dirtyState = CLEAN_WITH_REDO;
+  } else {
+    dirtyState = CLEAN_NO_TIMELINES;
+  }
+
+  var saveLevelButton = document.getElementById("saveLevelButton");
+  // the save button clears your timelines
+  saveLevelButton.disabled = dirtyState === CLEAN_NO_TIMELINES;
+  if (dirtyState >= EDITOR_DIRTY) {
+    // you should save
+    saveLevelButton.classList.add("click-me");
+    saveLevelButton.textContent = "*" + "Save Level";
+  } else {
+    saveLevelButton.classList.remove("click-me");
+    saveLevelButton.textContent = "Save Level";
+  }
+
+  var saveProgressButton = document.getElementById("saveProgressButton");
+  // you can't save a replay if your level is dirty
+  if (dirtyState === CLEAN_WITH_REDO) {
+    saveProgressButton.textContent = "Forget Progress";
+  } else {
+    saveProgressButton.textContent = "Save Progress";
+  }
+  saveProgressButton.disabled = dirtyState >= EDITOR_DIRTY || dirtyState === CLEAN_NO_TIMELINES;
+}
+function haveCheatcodesBeenUsed() {
+  return !unmoveStuff.undoStack.every(function(changeLog) {
+    // normal movement always starts with "i".
+    return changeLog[0][0] === "i";
+  });
 }
 
 var persistentState = {
@@ -1424,8 +1580,15 @@ var isCollisionEnabled = true;
 function isCollision() {
   return isCollisionEnabled || !persistentState.showEditor;
 }
+function isAnyCheatcodeEnabled() {
+  return persistentState.showEditor && (
+    !isGravityEnabled || !isCollisionEnabled
+  );
+}
+
+
 function showEditorChanged() {
-  document.getElementById("showHideEditor").value = (persistentState.showEditor ? "Hide" : "Show") + " Editor Stuff";
+  document.getElementById("showHideEditor").textContent = (persistentState.showEditor ? "Hide" : "Show") + " Editor Stuff";
   ["editorDiv", "editorPane"].forEach(function(id) {
     document.getElementById(id).style.display = persistentState.showEditor ? "block" : "none";
   });
@@ -1440,32 +1603,37 @@ function move(dr, dc) {
   animationQueueCursor = 0;
   freshlyRemovedAnimatedObjects = [];
   animationStart = new Date().getTime();
-  var changeLog = [];
   var activeSnake = findActiveSnake();
   var headRowcol = getRowcol(level, activeSnake.locations[0]);
   var newRowcol = {r:headRowcol.r + dr, c:headRowcol.c + dc};
   if (!isInBounds(level, newRowcol.r, newRowcol.c)) return;
   var newLocation = getLocation(level, newRowcol.r, newRowcol.c);
+  var changeLog = [];
+
+  // The changeLog for a player movement starts with the input
+  // when playing normally.
+  if (!isAnyCheatcodeEnabled()) {
+    changeLog.push(["i", activeSnake.id, dr, dc, animationQueue, freshlyRemovedAnimatedObjects]);
+  }
 
   var ate = false;
   var pushedObjects = [];
 
   if (isCollision()) {
     var newTile = level.map[newLocation];
-    if (isTileCodeAir(newTile)) {
-      var otherObject = findObjectAtLocation(newLocation);
-      if (otherObject != null) {
-        if (otherObject === activeSnake) return; // can't push yourself
-        if (otherObject.type === FRUIT) {
-          // eat
-          removeObject(otherObject, changeLog);
-          ate = true;
-        } else {
-          // push objects
-          if (!checkMovement(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
-        }
+    if (!isTileCodeAir(newTile)) return; // can't go through that tile
+    var otherObject = findObjectAtLocation(newLocation);
+    if (otherObject != null) {
+      if (otherObject === activeSnake) return; // can't push yourself
+      if (otherObject.type === FRUIT) {
+        // eat
+        removeObject(otherObject, changeLog);
+        ate = true;
+      } else {
+        // push objects
+        if (!checkMovement(activeSnake, otherObject, dr, dc, pushedObjects)) return false;
       }
-    } else return; // can't go through that tile
+    }
   }
 
   // slither forward
@@ -1586,7 +1754,7 @@ function move(dr, dc) {
             ],
           ]);
           didAnything = true;
-        } else throw asdf;
+        } else throw unreachable();
       });
       if (anySnakesDied) break;
     }
@@ -1774,7 +1942,7 @@ function removeObject(object, changeLog) {
 }
 function removeFromArray(array, element) {
   var index = array.indexOf(element);
-  if (index === -1) throw asdf;
+  if (index === -1) throw unreachable();
   array.splice(index, 1);
 }
 function findActiveSnake() {
@@ -1782,7 +1950,7 @@ function findActiveSnake() {
   for (var i = 0; i < snakes.length; i++) {
     if (snakes[i].id === activeSnakeId) return snakes[i];
   }
-  throw asdf;
+  throw unreachable();
 }
 function findBlockById(id) {
   return findObjectOfTypeAndId(BLOCK, id);
@@ -1968,7 +2136,7 @@ function render() {
   }
 
   // throw this in there somewhere
-  document.getElementById("showGridButton").value = (persistentState.showGrid ? "Hide" : "Show") + " Grid";
+  document.getElementById("showGridButton").textContent = (persistentState.showGrid ? "Hide" : "Show") + " Grid";
 
   if (animationProgress < 1.0) requestAnimationFrame(render);
   return; // this is the end of the function proper
@@ -2101,7 +2269,7 @@ function render() {
           drawTile(tileCode, rowcol.r, rowcol.c, pastedData.level, location);
         });
         pastedData.selectedObjects.forEach(drawObject);
-      } else throw asdf;
+      } else throw unreachable();
 
       context = savedContext;
       context.save();
@@ -2132,7 +2300,7 @@ function render() {
         drawCircle(r, c, 0.6, "#111");
         if (activePortalLocations.indexOf(location) !== -1) drawCircle(r, c, 0.3, "#666");
         break;
-      default: throw asdf;
+      default: throw unreachable();
     }
     function getAdjacentTiles() {
       return [
@@ -2240,7 +2408,7 @@ function render() {
         var rowcol = getRowcol(level, object.locations[0]);
         drawCircle(rowcol.r, rowcol.c, 1, "#f0f");
         break;
-      default: throw asdf;
+      default: throw unreachable();
     }
   }
 
@@ -2537,7 +2705,15 @@ function makeScaleCoordinatesFunction(width1, width2) {
   };
 }
 
+var expectHash;
 window.addEventListener("hashchange", function() {
+  if (location.hash === expectHash) {
+    // We're in the middle of saveLevel() or saveReplay().
+    // Don't react to that event.
+    expectHash = null;
+    return;
+  }
+  // The user typed into the url bar or used Back/Forward browser buttons, etc.
   loadFromLocationHash();
 });
 function loadFromLocationHash() {
@@ -2557,11 +2733,16 @@ function loadFromLocationHash() {
     alert(e);
     return false;
   }
-  if (hashPairs.length > 1) {
-    if (hashPairs[1][0] !== "replay") return false;
-    if (!parseAndLoadReplay(hashPairs[1][1])) return false;
-  }
   loadLevel(level);
+  if (hashPairs.length > 1) {
+    try {
+      if (hashPairs[1][0] !== "replay") throw new Error("unexpected hash pair: " + hashPairs[1][0]);
+      parseAndLoadReplay(hashPairs[1][1]);
+    } catch (e) {
+      alert(e);
+      return false;
+    }
+  }
   return true;
 }
 
