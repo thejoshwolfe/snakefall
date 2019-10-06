@@ -346,6 +346,7 @@ function saveLevel() {
   // This marks a starting point for solving the level.
   unmoveStuff.undoStack = [];
   unmoveStuff.redoStack = [];
+  editorHasBeenTouched = false;
   undoStuffChanged(unmoveStuff);
 }
 
@@ -1210,6 +1211,9 @@ function pushUndo(undoStuff, changeLog) {
   undoStuff.undoStack.push(changeLog);
   undoStuff.redoStack = [];
   paradoxes = [];
+
+  if (undoStuff === uneditStuff) editorHasBeenTouched = true;
+
   undoStuffChanged(undoStuff);
 }
 function reduceChangeLog(changeLog) {
@@ -1315,6 +1319,8 @@ function undoOneFrame(undoStuff) {
     redoChangeLog.push(level.width);
     undoStuff.redoStack.push(redoChangeLog);
   }
+
+  if (undoStuff === uneditStuff) editorHasBeenTouched = true;
 }
 function redo(undoStuff) {
   if (undoStuff.redoStack.length === 0) return; // already at the beginning
@@ -1346,6 +1352,8 @@ function redoOneFrame(undoStuff) {
     undoChangeLog.push(level.width);
     undoStuff.undoStack.push(undoChangeLog);
   }
+
+  if (undoStuff === uneditStuff) editorHasBeenTouched = true;
 }
 function undoChanges(changes, changeLog) {
   var widthContext = changes.pop();
@@ -1508,12 +1516,13 @@ var CLEAN_WITH_REDO = 1;
 var REPLAY_DIRTY = 2;
 var EDITOR_DIRTY = 3;
 var dirtyState = CLEAN_NO_TIMELINES;
+var editorHasBeenTouched = false;
 function updateDirtyState() {
-  if (uneditStuff.undoStack.length > 0 || haveCheatcodesBeenUsed()) {
+  if (haveCheatcodesBeenUsed() || editorHasBeenTouched) {
     dirtyState = EDITOR_DIRTY;
   } else if (unmoveStuff.undoStack.length > 0) {
     dirtyState = REPLAY_DIRTY;
-  } else if (unmoveStuff.redoStack.length > 0 || uneditStuff.redoStack.length > 0) {
+  } else if (unmoveStuff.redoStack.length > 0) {
     dirtyState = CLEAN_WITH_REDO;
   } else {
     dirtyState = CLEAN_NO_TIMELINES;
