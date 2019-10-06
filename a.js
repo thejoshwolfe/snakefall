@@ -26,6 +26,7 @@ var uneditStuff = {undoStack:[], redoStack:[], spanId:"editsSpan", undoButtonId:
 var paradoxes = [];
 function loadLevel(newLevel) {
   level = newLevel;
+  currentSerializedLevel = compressSerialization(stringifyLevel(newLevel));
 
   activateAnySnakePlease();
   unmoveStuff.undoStack = [];
@@ -291,15 +292,67 @@ function stringifyReplay() {
   return output;
 }
 function parseAndLoadReplay(string) {
-  alert("TODO: load the reply");
+  string = decompressSerialization(string);
+  var expectedPrefix = replayMagicNumber + "&";
+  if (string.substring(0, expectedPrefix.length) !== expectedPrefix) throw new Error("unrecognized replay string");
+  var cursor = expectedPrefix.length;
+
+  // the starting snakeid is 0, which may not exist, but we only validate it when doing a move.
+  activeSnakeId = 0;
+  while (cursor < string.length) {
+    var snakeIdStr = "";
+    var c = string.charAt(cursor);
+    cursor += 1;
+    while ('0' <= c && c <= '9') {
+      snakeIdStr += c;
+      if (cursor >= string.length) throw new Error("replay string has unexpected end of input");
+      c = string.charAt(cursor);
+      cursor += 1;
+    }
+    if (snakeIdStr.length > 0) {
+      activeSnakeId = parseInt(snakeIdStr);
+      // don't just validate when switching snakes, but on every move.
+    }
+
+    // doing a move.
+    if (!getSnakes().some(function(snake) {
+      return snake.id === activeSnakeId;
+    })) {
+      throw new Error("invalid snake id: " + activeSnakeId);
+    }
+    switch (c) {
+      case 'l': move( 0, -1); break;
+      case 'u': move(-1,  0); break;
+      case 'r': move( 0,  1); break;
+      case 'd': move( 1,  0); break;
+      default: throw new Error("replay string has invalid direction: " + c);
+    }
+  }
+
+  // now that the replay was executed successfully, undo it all so that it's available in the redo buffer.
+  reset(unmoveStuff);
 }
 
-function saveToUrlBar(withReplay) {
+var currentSerializedLevel;
+function saveLevel() {
   if (isDead()) return alert("Can't save while you're dead!");
-  var hash = "#level=" + compressSerialization(stringifyLevel(level));
-  if (withReplay) {
-    hash += "#replay=" + compressSerialization(stringifyReplay());
-  }
+  var serializedLevel = compressSerialization(stringifyLevel(level));
+  currentSerializedLevel = serializedLevel;
+  var hash = "#level=" + serializedLevel;
+  expectHash = hash;
+  location.hash = hash;
+
+  // This marks a starting point for solving the level.
+  unmoveStuff.undoStack = [];
+  unmoveStuff.redoStack = [];
+  undoStuffChanged(unmoveStuff);
+}
+
+function saveReplay() {
+  // preserve the level in the url bar.
+  var hash = "#level=" + currentSerializedLevel;
+  hash += "#replay=" + compressSerialization(stringifyReplay());
+  expectHash = hash;
   location.hash = hash;
 }
 
@@ -415,8 +468,9 @@ document.addEventListener("keydown", function(event) {
       if (!persistentState.showEditor && modifierMask === 0)     { move(1, 0); break; }
       if ( persistentState.showEditor && modifierMask === 0)     { setPaintBrushTileCode(SPIKE); break; }
       if ( persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("resize"); break; }
-      if (modifierMask ===  CTRL       ) { saveToUrlBar(); break; }
-      if (modifierMask === (CTRL|SHIFT)) { saveToUrlBar(true); break; }
+      if ( persistentState.showEditor && modifierMask === CTRL)  { saveLevel(); break; }
+      if (!persistentState.showEditor && modifierMask === CTRL)  { saveReplay(); break; }
+      if (modifierMask === (CTRL|SHIFT))                         { saveReplay(); break; }
       return;
     case "X".charCodeAt(0):
       if ( persistentState.showEditor && modifierMask === 0) { setPaintBrushTileCode(EXIT); break; }
@@ -502,7 +556,7 @@ document.getElementById("showGridButton").addEventListener("click", function() {
   toggleGrid();
 });
 document.getElementById("saveProgressButton").addEventListener("click", function() {
-  saveToUrlBar(true);
+  saveReplay();
 });
 document.getElementById("restartButton").addEventListener("click", function() {
   reset(unmoveStuff);
@@ -590,7 +644,7 @@ document.getElementById("reeditButton").addEventListener("click", function() {
   render();
 });
 document.getElementById("saveLevelButton").addEventListener("click", function() {
-  saveToUrlBar();
+  saveLevel();
 });
 document.getElementById("copyButton").addEventListener("click", function() {
   copySelection();
@@ -1418,7 +1472,6 @@ function undoStuffChanged(undoStuff) {
   });
   document.getElementById("paradoxDiv").innerHTML = paradoxDivContent;
 
-  // TODO: update dirty state
   updateDirtyState();
 }
 
@@ -2610,7 +2663,15 @@ function makeScaleCoordinatesFunction(width1, width2) {
   };
 }
 
+var expectHash;
 window.addEventListener("hashchange", function() {
+  if (location.hash === expectHash) {
+    // We're in the middle of saveLevel() or saveReplay().
+    // Don't react to that event.
+    expectHash = null;
+    return;
+  }
+  // The user typed into the url bar or used Back/Forward browser buttons, etc.
   loadFromLocationHash();
 });
 function loadFromLocationHash() {
@@ -2630,11 +2691,16 @@ function loadFromLocationHash() {
     alert(e);
     return false;
   }
-  if (hashPairs.length > 1) {
-    if (hashPairs[1][0] !== "replay") return false;
-    if (!parseAndLoadReplay(hashPairs[1][1])) return false;
-  }
   loadLevel(level);
+  if (hashPairs.length > 1) {
+    try {
+      if (hashPairs[1][0] !== "replay") throw new Error("unexpected hash pair: " + hashPairs[1][0]);
+      parseAndLoadReplay(hashPairs[1][1]);
+    } catch (e) {
+      alert(e);
+      return false;
+    }
+  }
   return true;
 }
 
