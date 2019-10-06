@@ -350,9 +350,13 @@ function saveLevel() {
 }
 
 function saveReplay() {
+  if (dirtyState === EDITOR_DIRTY) return alert("Can't save a replay with unsaved editor changes.");
   // preserve the level in the url bar.
   var hash = "#level=" + currentSerializedLevel;
-  hash += "#replay=" + compressSerialization(stringifyReplay());
+  if (dirtyState === REPLAY_DIRTY) {
+    // there is a replay to save
+    hash += "#replay=" + compressSerialization(stringifyReplay());
+  }
   expectHash = hash;
   location.hash = hash;
 }
@@ -1503,8 +1507,8 @@ var CLEAN_NO_TIMELINES = 0;
 var CLEAN_WITH_REDO = 1;
 var REPLAY_DIRTY = 2;
 var EDITOR_DIRTY = 3;
+var dirtyState = CLEAN_NO_TIMELINES;
 function updateDirtyState() {
-  var dirtyState;
   if (uneditStuff.undoStack.length > 0 || haveCheatcodesBeenUsed()) {
     dirtyState = EDITOR_DIRTY;
   } else if (unmoveStuff.undoStack.length > 0) {
@@ -1529,7 +1533,12 @@ function updateDirtyState() {
 
   var saveProgressButton = document.getElementById("saveProgressButton");
   // you can't save a replay if your level is dirty
-  saveProgressButton.disabled = dirtyState !== REPLAY_DIRTY;
+  if (dirtyState === CLEAN_WITH_REDO) {
+    saveProgressButton.textContent = "Forget Progress";
+  } else {
+    saveProgressButton.textContent = "Save Progress";
+  }
+  saveProgressButton.disabled = dirtyState >= EDITOR_DIRTY || dirtyState === CLEAN_NO_TIMELINES;
 }
 function haveCheatcodesBeenUsed() {
   return !unmoveStuff.undoStack.every(function(changeLog) {

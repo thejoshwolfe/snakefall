@@ -8,7 +8,7 @@
         100% { background-color: buttonface; }
       }
       button.click-me {
-        animation: click_me 2s alternate;
+        animation: click_me 2s 2 alternate;
         font-weight: bold;
       }
     </style>
@@ -55,7 +55,7 @@
       Moves: <span id="movesSpan">0+0</span>
       <button id="removeButton" title="Y, Shift+Backspace, Shift+Z, Shift+Q" disabled>&gt;&gt; Re-move</button>
       <button id="restartButton" title="R - Unmove all the way. Shift+R - Re-move all the way">Restart</button>
-      <button id="saveProgressButton" title="Ctrl+Shift+S - Saves a replay URL to the URL bar of your browser">Save Progress</button>
+      <button id="saveProgressButton" title="Ctrl+Shift+S - Saves a replay URL to the URL bar of your browser. Use &gt;&gt; Re-move or Shift+R to restore state.">Save Progress</button>
     </div>
 
     <button id="showHideEditor" title="\">Show Editor Stuff</button>
