@@ -1,7 +1,7 @@
 function unreachable() { return new Error("unreachable"); }
 if (typeof VERSION !== "undefined") {
   document.getElementById("versionSpan").innerHTML =
-    '<a href="https://github.com/thejoshwolfe/snakefall/commits/' + VERSION + '">' + VERSION + '</a>';
+    '<a href="https://github.com/thejoshwolfe/snakefall/blob/' + VERSION.sha1 + '/README.md">' + VERSION.tag + '</a>';
 }
 var canvas = document.getElementById("canvas");
 

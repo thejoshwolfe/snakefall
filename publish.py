@@ -4,14 +4,21 @@ import sys
 import subprocess
 import re
 import os
+import json
 
 def main():
     # generate version.js
-    version = git("rev-parse", "--short", "HEAD").rstrip()
-    if re.match(r"^[0-9a-f]{4,40}$", version) == None:
-        sys.exit("ERROR: malformed git rev-parse output: " + repr(version))
+    sha1 = git("rev-parse", "--verify", "HEAD").rstrip()
+    if re.match(r"^[0-9a-f]{40}$", sha1) == None:
+        sys.exit("ERROR: malformed git rev-parse output: " + repr(sha1))
+    recent_tag = git("describe", "--tags", "--abbrev=0").rstrip()
+    if re.match(r"^\d+\.\d+\.\d+$", recent_tag) == None:
+        sys.exit("ERROR: unexpected output from git describe: " + repr(recent_tag))
     with open("version.js", "w") as f:
-        f.write('var VERSION = "{}";\n'.format(version))
+        f.write('var VERSION = {};\n'.format(json.dumps({
+            "sha1": sha1,
+            "tag": recent_tag,
+        })))
 
     # determine experimental branch
     branch_name = git("rev-parse", "--abbrev-ref", "HEAD").rstrip()
