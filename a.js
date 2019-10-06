@@ -331,6 +331,7 @@ function parseAndLoadReplay(string) {
 
   // now that the replay was executed successfully, undo it all so that it's available in the redo buffer.
   reset(unmoveStuff);
+  document.getElementById("removeButton").classList.add("click-me");
 }
 
 var currentSerializedLevel;
@@ -1183,9 +1184,12 @@ function paintTileAtLocation(location, tileCode, changeLog) {
 
 function pushUndo(undoStuff, changeLog) {
   // changeLog = [
-  //   ["i", 0, -1, 0],                              // player input for snake 0, dr:-1, dc:0. has no effect on state.
+  //   ["i", 0, -1, 0, animationQueue, freshlyRemovedAnimatedObjects],
+  //                                                 // player input for snake 0, dr:-1, dc:0. has no effect on state.
   //                                                 //   "i" is always the first change in normal player movement.
   //                                                 //   if a changeLog does not start with "i", then it is an editor action.
+  //                                                 //   animationQueue and freshlyRemovedAnimatedObjects
+  //                                                 //   are used for animating re-move.
   //   ["m", 21, 0, 1],                              // map at location 23 changed from 0 to 1
   //   ["s", 0, [false, [1,2]], [false, [2,3]]],     // snake id 0 moved from alive at [1, 2] to alive at [2, 3]
   //   ["s", 1, [false, [11,12]], [true, [12,13]]],  // snake id 1 moved from alive at [11, 12] to dead at [12, 13]
@@ -1324,6 +1328,11 @@ function unreset(undoStuff) {
     redoOneFrame(undoStuff);
   }
   undoStuffChanged(undoStuff);
+
+  // don't animate the last frame
+  animationQueue = [];
+  animationQueueCursor = 0;
+  freshlyRemovedAnimatedObjects = [];
 }
 function redoOneFrame(undoStuff) {
   var doThis = undoStuff.redoStack.pop();
@@ -1340,6 +1349,15 @@ function undoChanges(changes, changeLog) {
   for (var i = changes.length - 1; i >= 0; i--) {
     var paradoxDescription = undoChange(changes[i]);
     if (paradoxDescription != null) paradoxes.push(paradoxDescription);
+  }
+
+  var lastChange = changes[changes.length - 1];
+  if (lastChange[0] === "i") {
+    // replay animation
+    animationQueue = lastChange[4];
+    animationQueueCursor = 0;
+    freshlyRemovedAnimatedObjects = lastChange[5];
+    animationStart = new Date().getTime();
   }
 
   function undoChange(change) {
@@ -1475,6 +1493,10 @@ function undoStuffChanged(undoStuff) {
   document.getElementById("paradoxDiv").innerHTML = paradoxDivContent;
 
   updateDirtyState();
+
+  if (unmoveStuff.redoStack.length === 0) {
+    document.getElementById("removeButton").classList.remove("click-me");
+  }
 }
 
 var CLEAN_NO_TIMELINES = 0;
@@ -1573,7 +1595,7 @@ function move(dr, dc) {
   // The changeLog for a player movement starts with the input
   // when playing normally.
   if (!isAnyCheatcodeEnabled()) {
-    changeLog.push(["i", activeSnake.id, dr, dc]);
+    changeLog.push(["i", activeSnake.id, dr, dc, animationQueue, freshlyRemovedAnimatedObjects]);
   }
 
   var ate = false;
