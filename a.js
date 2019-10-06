@@ -390,12 +390,9 @@ document.addEventListener("keydown", function(event) {
     case "R".charCodeAt(0):
       if (persistentState.showEditor && modifierMask === SHIFT) { setPaintBrushTileCode("select"); break; }
       if (modifierMask === 0)     { reset(unmoveStuff);  break; }
-      if (modifierMask === SHIFT) { replay(unmoveStuff); break; }
+      if (modifierMask === SHIFT) { unreset(unmoveStuff); break; }
       return;
 
-    case "P".charCodeAt(0):
-      if ( persistentState.showEditor && modifierMask === 0) { playtest(); break; }
-      return;
     case 220: // backslash
       if (modifierMask === 0) { toggleShowEditor(); break; }
       return;
@@ -584,9 +581,6 @@ paintButtonIdAndTileCodes.forEach(function(pair) {
     setPaintBrushTileCode(tileCode);
   });
 });
-document.getElementById("playtestButton").addEventListener("click", function() {
-  playtest();
-});
 document.getElementById("uneditButton").addEventListener("click", function() {
   undo(uneditStuff);
   render();
@@ -621,10 +615,10 @@ function toggleCollision() {
   refreshCheatButtonText();
 }
 function refreshCheatButtonText() {
-  document.getElementById("cheatGravityButton").value = isGravityEnabled ? "Gravity: ON" : "Gravity: OFF";
+  document.getElementById("cheatGravityButton").textContent = isGravityEnabled ? "Gravity: ON" : "Gravity: OFF";
   document.getElementById("cheatGravityButton").style.background = isGravityEnabled ? "" : "#f88";
 
-  document.getElementById("cheatCollisionButton").value = isCollisionEnabled ? "Collision: ON" : "Collision: OFF";
+  document.getElementById("cheatCollisionButton").textContent = isCollisionEnabled ? "Collision: ON" : "Collision: OFF";
   document.getElementById("cheatCollisionButton").style.background = isCollisionEnabled ? "" : "#f88";
 }
 
@@ -1133,15 +1127,11 @@ function paintTileAtLocation(location, tileCode, changeLog) {
   level.map[location] = tileCode;
 }
 
-function playtest() {
-  unmoveStuff.undoStack = [];
-  unmoveStuff.redoStack = [];
-  undoStuffChanged(unmoveStuff);
-}
-
 function pushUndo(undoStuff, changeLog) {
   // changeLog = [
-  //   ["i", 0, -1, 0],                              // player input for snake 0, dr:-1, dc:0. has no effect on state. always the first change in unmoveStuff changeLogs.
+  //   ["i", 0, -1, 0],                              // player input for snake 0, dr:-1, dc:0. has no effect on state.
+  //                                                 //   "i" is always the first change in normal player movement.
+  //                                                 //   if a changeLog does not start with "i", then it is an editor action.
   //   ["m", 21, 0, 1],                              // map at location 23 changed from 0 to 1
   //   ["s", 0, [false, [1,2]], [false, [2,3]]],     // snake id 0 moved from alive at [1, 2] to alive at [2, 3]
   //   ["s", 1, [false, [11,12]], [true, [12,13]]],  // snake id 1 moved from alive at [11, 12] to dead at [12, 13]
@@ -1272,7 +1262,7 @@ function redo(undoStuff) {
   redoOneFrame(undoStuff);
   undoStuffChanged(undoStuff);
 }
-function replay(undoStuff) {
+function unreset(undoStuff) {
   animationQueue = [];
   animationQueueCursor = 0;
   paradoxes = [];
@@ -1427,6 +1417,48 @@ function undoStuffChanged(undoStuff) {
     paradoxDivContent += "Time Travel Paradox! " + uniqueParadoxes[i];
   });
   document.getElementById("paradoxDiv").innerHTML = paradoxDivContent;
+
+  // TODO: update dirty state
+  updateDirtyState();
+}
+
+var CLEAN_NO_TIMELINES = 0;
+var CLEAN_WITH_REDO = 1;
+var REPLAY_DIRTY = 2;
+var EDITOR_DIRTY = 3;
+function updateDirtyState() {
+  var dirtyState;
+  if (uneditStuff.undoStack.length > 0 || haveCheatcodesBeenUsed()) {
+    dirtyState = EDITOR_DIRTY;
+  } else if (unmoveStuff.undoStack.length > 0) {
+    dirtyState = REPLAY_DIRTY;
+  } else if (unmoveStuff.redoStack.length > 0 || uneditStuff.redoStack.length > 0) {
+    dirtyState = CLEAN_WITH_REDO;
+  } else {
+    dirtyState = CLEAN_NO_TIMELINES;
+  }
+
+  var saveLevelButton = document.getElementById("saveLevelButton");
+  // the save button clears your timelines
+  saveLevelButton.disabled = dirtyState === CLEAN_NO_TIMELINES;
+  if (dirtyState >= EDITOR_DIRTY) {
+    // you should save
+    saveLevelButton.classList.add("click-me");
+    saveLevelButton.textContent = "*" + "Save Level";
+  } else {
+    saveLevelButton.classList.remove("click-me");
+    saveLevelButton.textContent = "Save Level";
+  }
+
+  var saveProgressButton = document.getElementById("saveProgressButton");
+  // you can't save a replay if your level is dirty
+  saveProgressButton.disabled = dirtyState !== REPLAY_DIRTY;
+}
+function haveCheatcodesBeenUsed() {
+  return !unmoveStuff.undoStack.every(function(changeLog) {
+    // normal movement always starts with "i".
+    return changeLog[0][0] === "i";
+  });
 }
 
 var persistentState = {
@@ -1453,8 +1485,15 @@ var isCollisionEnabled = true;
 function isCollision() {
   return isCollisionEnabled || !persistentState.showEditor;
 }
+function isAnyCheatcodeEnabled() {
+  return persistentState.showEditor && (
+    !isGravityEnabled || !isCollisionEnabled
+  );
+}
+
+
 function showEditorChanged() {
-  document.getElementById("showHideEditor").value = (persistentState.showEditor ? "Hide" : "Show") + " Editor Stuff";
+  document.getElementById("showHideEditor").textContent = (persistentState.showEditor ? "Hide" : "Show") + " Editor Stuff";
   ["editorDiv", "editorPane"].forEach(function(id) {
     document.getElementById(id).style.display = persistentState.showEditor ? "block" : "none";
   });
@@ -1474,10 +1513,13 @@ function move(dr, dc) {
   var newRowcol = {r:headRowcol.r + dr, c:headRowcol.c + dc};
   if (!isInBounds(level, newRowcol.r, newRowcol.c)) return;
   var newLocation = getLocation(level, newRowcol.r, newRowcol.c);
-
-  // the changeLog for a player movement always starts with the input
   var changeLog = [];
-  changeLog.push(["i", activeSnake.id, dr, dc]);
+
+  // The changeLog for a player movement starts with the input
+  // when playing normally.
+  if (!isAnyCheatcodeEnabled()) {
+    changeLog.push(["i", activeSnake.id, dr, dc]);
+  }
 
   var ate = false;
   var pushedObjects = [];
@@ -1999,7 +2041,7 @@ function render() {
   }
 
   // throw this in there somewhere
-  document.getElementById("showGridButton").value = (persistentState.showGrid ? "Hide" : "Show") + " Grid";
+  document.getElementById("showGridButton").textContent = (persistentState.showGrid ? "Hide" : "Show") + " Grid";
 
   if (animationProgress < 1.0) requestAnimationFrame(render);
   return; // this is the end of the function proper
