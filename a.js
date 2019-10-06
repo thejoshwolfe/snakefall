@@ -1345,7 +1345,9 @@ function undoChanges(changes, changeLog) {
   function undoChange(change) {
     // note: everything here is going backwards: to -> from
     if (change[0] === "i") {
-      return null; // no state change
+      // no state change, but preserve the intention.
+      changeLog.push(change);
+      return null;
     } else if (change[0] === "h") {
       // change height
       var fromHeight = change[1];
